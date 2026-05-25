@@ -1,20 +1,13 @@
-const mysql = require('mysql2');
-const dotenv = require('dotenv');
-dotenv.config();
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+const db = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-db.connect((err) => {
-  if (err) {
-    console.log('Gagal konek database:', err.message);
-  } else {
-    console.log('Database terhubung!');
-  }
-});
+db.connect()
+  .then(() => console.log('Database terhubung!'))
+  .catch(err => console.log('Gagal konek database:', err.message));
 
 module.exports = db;
