@@ -1,15 +1,6 @@
-const { Pool } = require('pg');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js'
 
-console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'ADA' : 'TIDAK ADA');
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY
 
-const db = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-db.connect()
-  .then(() => console.log('Database terhubung!'))
-  .catch(err => console.log('Gagal konek database:', err.message));
-
-module.exports = db;
+export const supabase = createClient(supabaseUrl, supabaseKey)
