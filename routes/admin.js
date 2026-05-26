@@ -999,11 +999,11 @@ router.get('/test-wa', async (req, res) => {
   
   try {
     const response = await fetch('https://api.fonnte.com/device', {
-      method: 'GET',
+      method: 'POST',
       headers: { 'Authorization': token }
     });
     const text = await response.text();
-    res.json({ status: 'ok', token_ada: true, token_preview: token.substring(0,10)+'...', fonnte_response: text });
+    res.json({ status: 'ok', token_preview: token.substring(0,10)+'...', fonnte_response: text });
   } catch (e) {
     res.json({ status: 'error', message: e.message });
   }
