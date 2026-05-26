@@ -222,9 +222,7 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
       'UPDATE tagihan SET jenis=$1, jumlah=$2, tanggal_bayar=$3, status=$4, semester=$5 WHERE id=$6',
       [jenis, jumlah, tanggal_bayar || null, status, semester || null, req.params.id]
     );
-    res.json({ message: 'Tagihan berhasil diupdate' });
-
-    // Kirim notifikasi WA jika baru ditandai lunas
+    // Kirim WA SEBELUM res.json
     if (statusLama === 'belum' && status === 'lunas' && user_id && kirim_notif !== false) {
       try {
         const uResult = await db.query('SELECT nama, nama_siswa, no_hp FROM users WHERE id=$1', [user_id]);
@@ -247,6 +245,9 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
         }
       } catch (e) { console.log('WA notif error:', e.message); }
     }
+
+    res.json({ message: 'Tagihan berhasil diupdate' });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
