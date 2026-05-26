@@ -19,13 +19,14 @@ const formatNomor = (nomor) => {
   return n;
 };
 
-const kirimWA = async (nomor, pesan) => {
+const kirimWA = async (nomor, pesan, logInfo = {}) => {
   if (!nomor || nomor.trim() === '') return;
   if (!process.env.FONNTE_TOKEN) {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
   const nomorFormatted = formatNomor(nomor);
+  let statusKirim = 'terkirim';
   try {
     const response = await fetch('https://api.fonnte.com/send', {
       method: 'POST',
@@ -34,10 +35,30 @@ const kirimWA = async (nomor, pesan) => {
     });
     const hasil = await response.json();
     console.log('WA kirim ke', nomorFormatted, ':', JSON.stringify(hasil));
-    if (!hasil.status) console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    if (!hasil.status) {
+      statusKirim = 'gagal';
+      console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    }
   } catch (e) {
+    statusKirim = 'gagal';
     console.log('WA error:', e.message);
   }
+  // Simpan log
+  try {
+    await db.query(
+      `INSERT INTO log_notif_wa (user_id, nama_wali, nama_siswa, no_hp, jenis_notif, pesan, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        logInfo.user_id || null,
+        logInfo.nama_wali || '-',
+        logInfo.nama_siswa || '-',
+        nomorFormatted,
+        logInfo.jenis_notif || 'notifikasi',
+        pesan,
+        statusKirim
+      ]
+    );
+  } catch (e) { console.log('Log WA error:', e.message); }
 };
 
 // ============================================================
@@ -197,7 +218,8 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lakukan pembayaran.\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { user_id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'tagihan_baru' }
           );
         }
       } catch (e) { console.log('WA notif error:', e.message); }
@@ -240,7 +262,8 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Terima kasih atas pembayarannya 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { user_id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'tagihan_lunas' }
           );
         }
       } catch (e) { console.log('WA notif error:', e.message); }
@@ -332,7 +355,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
             `Terima kasih atas pembayarannya 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { user_id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'pembayaran_lunas' }
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
@@ -362,7 +386,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               `━━━━━━━━━━━━━━━━━━\n` +
               `Mohon segera lunasi sisa pembayaran 🙏\n\n` +
               `_PP. Muhammadiyah Mambaul Ulum_\n` +
-              `_Mojo - Andong - Boyolali_`
+              `_Mojo - Andong - Boyolali_`,
+            { user_id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'pembayaran_cicilan' }
             );
           }
         } catch (e) { console.log('WA error:', e.message); }
@@ -868,7 +893,8 @@ const kirimPengingatSemua = async () => {
         `━━━━━━━━━━━━━━━━━━\n` +
         `Mohon segera lakukan pembayaran 🙏\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
-        `_Mojo - Andong - Boyolali_`
+        `_Mojo - Andong - Boyolali_`,
+        { user_id: u.id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'pengingat_otomatis' }
       );
       terkirim++;
     } catch (e) { console.log('WA pengingat error:', e.message); }
@@ -956,7 +982,8 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `━━━━━━━━━━━━━━━━━━\n` +
       `Mohon segera lakukan pembayaran 🙏\n\n` +
       `_PP. Muhammadiyah Mambaul Ulum_\n` +
-      `_Mojo - Andong - Boyolali_`
+      `_Mojo - Andong - Boyolali_`,
+      { user_id: u.id, nama_wali: u.nama, nama_siswa: u.nama_siswa, jenis_notif: 'pengingat_manual' }
     );
     res.json({ message: `Pengingat berhasil dikirim ke ${u.nama} (${u.no_hp})` });
   } catch (err) {
@@ -993,6 +1020,52 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
   }
+// ============================================================
+// RIWAYAT PEMBAYARAN SEMUA SANTRI
+// ============================================================
+router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        p.id, p.jumlah_bayar, p.tanggal_bayar, p.keterangan,
+        t.jenis as jenis_tagihan, t.jumlah as total_tagihan,
+        u.nama_siswa, u.nama as nama_wali, u.kelas
+      FROM pembayaran p
+      JOIN tagihan t ON p.tagihan_id = t.id
+      JOIN users u ON t.user_id = u.id
+      ORDER BY p.tanggal_bayar DESC, p.id DESC
+      LIMIT 500
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
+// RIWAYAT NOTIFIKASI WA
+// ============================================================
+router.get('/riwayat-notif', verifyAdmin, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT * FROM log_notif_wa
+      ORDER BY created_at DESC
+      LIMIT 500
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/riwayat-notif/:id', verifyAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM log_notif_wa WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Log dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 });
 router.get('/test-wa', async (req, res) => {
   const token = process.env.FONNTE_TOKEN;
