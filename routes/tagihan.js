@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const db = require('../config/db');
+const { supabase } = require('../config/db');
 
 // Middleware verify token
 const verifyToken = (req, res, next) => {
@@ -17,19 +17,25 @@ const verifyToken = (req, res, next) => {
 // GET semua tagihan milik user yang login
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await db.query(
-      `SELECT t.*, 
-       COALESCE((
-         SELECT SUM(p.jumlah_bayar) 
-         FROM pembayaran p 
-         WHERE p.tagihan_id = t.id
-       ), 0) AS sudah_dicicil
-       FROM tagihan t 
-       WHERE t.user_id = $1 
-       ORDER BY t.id`,
-      [req.userId]
-    );
-    res.json(result.rows);
+    const { data: tagihan, error } = await supabase
+      .from('tagihan')
+      .select('*')
+      .eq('user_id', req.userId)
+      .order('id');
+
+    if (error) return res.status(500).json({ message: 'Server error', detail: error.message });
+
+    // Tambahkan sudah_dicicil per tagihan
+    const result = await Promise.all(tagihan.map(async (t) => {
+      const { data: bayar } = await supabase
+        .from('pembayaran')
+        .select('jumlah_bayar')
+        .eq('tagihan_id', t.id);
+      const sudah_dicicil = bayar ? bayar.reduce((a, p) => a + Number(p.jumlah_bayar), 0) : 0;
+      return { ...t, sudah_dicicil };
+    }));
+
+    res.json(result);
   } catch (err) {
     console.error('Error tagihan:', err.message);
     res.status(500).json({ message: 'Server error', detail: err.message });
