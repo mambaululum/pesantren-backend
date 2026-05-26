@@ -993,20 +993,17 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
   }
 });
-// ============================================================
-// TEST FONNTE TOKEN
-// ============================================================
 router.get('/test-wa', async (req, res) => {
   const token = process.env.FONNTE_TOKEN;
   if (!token) return res.json({ status: 'error', message: 'FONNTE_TOKEN tidak ada di env' });
   
   try {
-    const response = await fetch('https://api.fonnte.com/validate-token', {
-      method: 'POST',
+    const response = await fetch('https://api.fonnte.com/device', {
+      method: 'GET',
       headers: { 'Authorization': token }
     });
-    const hasil = await response.json();
-    res.json({ status: 'ok', token_ada: true, fonnte_response: hasil });
+    const text = await response.text();
+    res.json({ status: 'ok', token_ada: true, token_preview: token.substring(0,10)+'...', fonnte_response: text });
   } catch (e) {
     res.json({ status: 'error', message: e.message });
   }
