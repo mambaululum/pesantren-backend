@@ -1,17 +1,10 @@
-const { Pool } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
-pool.connect()
-  .then(() => console.log('✅ Database Supabase terhubung!'))
-  .catch(err => console.error('❌ Gagal konek database:', err.message));
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Export fungsi query langsung
-module.exports = {
-  query: (sql, params) => pool.query(sql, params)
-};
+module.exports = { supabase };
