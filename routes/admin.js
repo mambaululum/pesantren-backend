@@ -943,4 +943,57 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
   }
 });
 
+// ============================================================
+// RIWAYAT PEMBAYARAN
+// ============================================================
+router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
+  try {
+    const { data: pembayaran, error } = await supabase
+      .from('pembayaran')
+      .select(`
+        id, jumlah_bayar, tanggal_bayar, keterangan,
+        tagihan:tagihan_id (
+          id, jenis, jumlah, user_id,
+          users:user_id (nama_siswa, kelas, nama)
+        )
+      `)
+      .order('tanggal_bayar', { ascending: false });
+
+    if (error) return res.status(500).json({ message: error.message });
+
+    const result = (pembayaran || []).map(p => ({
+      id: p.id,
+      tanggal_bayar: p.tanggal_bayar,
+      jumlah_bayar: p.jumlah_bayar,
+      keterangan: p.keterangan,
+      jenis_tagihan: p.tagihan?.jenis,
+      total_tagihan: p.tagihan?.jumlah,
+      nama_siswa: p.tagihan?.users?.nama_siswa,
+      nama_wali: p.tagihan?.users?.nama,
+      kelas: p.tagihan?.users?.kelas,
+    }));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
+// RIWAYAT NOTIFIKASI WA
+// ============================================================
+router.get('/riwayat-notif', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('log_notif_wa')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
