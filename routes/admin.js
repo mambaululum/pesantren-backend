@@ -19,13 +19,14 @@ const formatNomor = (nomor) => {
   return n;
 };
 
-const kirimWA = async (nomor, pesan) => {
+const kirimWA = async (nomor, pesan, jenis_notif = 'lainnya', user_id = null, nama_wali = null, nama_siswa = null) => {
   if (!nomor || nomor.trim() === '') return;
   if (!process.env.FONNTE_TOKEN) {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
   const nomorFormatted = formatNomor(nomor);
+  let status = 'gagal';
   try {
     const response = await fetch('https://api.fonnte.com/send', {
       method: 'POST',
@@ -34,9 +35,26 @@ const kirimWA = async (nomor, pesan) => {
     });
     const hasil = await response.json();
     console.log('WA kirim ke', nomorFormatted, ':', JSON.stringify(hasil));
-    if (!hasil.status) console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    if (hasil.status) {
+      status = 'terkirim';
+    } else {
+      console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    }
   } catch (e) {
     console.log('WA error:', e.message);
+  }
+
+  // Simpan log ke database
+  try {
+    await supabase.from('log_notif_wa').insert({
+      user_id, nama_wali, nama_siswa,
+      no_hp: nomorFormatted,
+      jenis_notif,
+      status,
+      pesan,
+    });
+  } catch (e) {
+    console.log('Log WA error:', e.message);
   }
 };
 
@@ -242,7 +260,8 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
           `━━━━━━━━━━━━━━━━━━\n` +
           `Mohon segera lakukan pembayaran.\n\n` +
           `_PP. Muhammadiyah Mambaul Ulum_\n` +
-          `_Mojo - Andong - Boyolali_`
+          `_Mojo - Andong - Boyolali_`,
+          'tagihan_baru', user_id, rows.nama, rows.nama_siswa
         );
       }
     }
@@ -283,7 +302,8 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
           `━━━━━━━━━━━━━━━━━━\n` +
           `Terima kasih atas pembayarannya 🙏\n\n` +
           `_PP. Muhammadiyah Mambaul Ulum_\n` +
-          `_Mojo - Andong - Boyolali_`
+          `_Mojo - Andong - Boyolali_`,
+          'tagihan_lunas', user_id, u.nama, u.nama_siswa
         );
       }
     }
@@ -358,7 +378,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
           `Terima kasih atas pembayarannya 🙏\n\n` +
           `_PP. Muhammadiyah Mambaul Ulum_\n` +
-          `_Mojo - Andong - Boyolali_`
+          `_Mojo - Andong - Boyolali_`,
+          'pembayaran_lunas', user_id, u.nama, u.nama_siswa
         );
       }
     } else {
@@ -382,7 +403,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lunasi sisa pembayaran 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            'cicilan', user_id, u.nama, u.nama_siswa
           );
         }
       }, 500);
@@ -691,7 +713,8 @@ router.post('/semester', verifyAdmin, async (req, res) => {
         `━━━━━━━━━━━━━━━━━━\n` +
         `Mohon segera lakukan pembayaran 🙏\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
-        `_Mojo - Andong - Boyolali_`
+        `_Mojo - Andong - Boyolali_`,
+        'tagihan_semester', uid, u.nama, u.nama_siswa
       );
     }
   } catch (err) {
@@ -831,7 +854,8 @@ const kirimPengingatSemua = async () => {
       `━━━━━━━━━━━━━━━━━━\n` +
       `Mohon segera lakukan pembayaran 🙏\n\n` +
       `_PP. Muhammadiyah Mambaul Ulum_\n` +
-      `_Mojo - Andong - Boyolali_`
+      `_Mojo - Andong - Boyolali_`,
+      'pengingat', u.id, u.nama, u.nama_siswa
     );
     terkirim++;
   }
@@ -904,7 +928,8 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `━━━━━━━━━━━━━━━━━━\n` +
       `Mohon segera lakukan pembayaran 🙏\n\n` +
       `_PP. Muhammadiyah Mambaul Ulum_\n` +
-      `_Mojo - Andong - Boyolali_`
+      `_Mojo - Andong - Boyolali_`,
+      'pengingat', u.id, u.nama, u.nama_siswa
     );
     res.json({ message: `Pengingat berhasil dikirim ke ${u.nama} (${u.no_hp})` });
   } catch (err) {
@@ -936,7 +961,7 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     `_Mojo - Andong - Boyolali_`;
 
   try {
-    await kirimWA(no_hp, pesan);
+    await kirimWA(no_hp, pesan, 'kelebihan_bayar', null, nama_wali, nama_siswa);
     res.json({ message: 'Notifikasi WA berhasil dikirim' });
   } catch (e) {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
