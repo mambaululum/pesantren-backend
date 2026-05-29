@@ -999,7 +999,7 @@ console.log('Fonnte PDF response:', JSON.stringify(hasilPDF));
         } else {
           await kirimWA(u.no_hp, pesanLengkap, { jenis: 'pengumuman', nama_wali: u.nama, nama_siswa: u.nama_siswa });
         }
-        terkirim++;ad
+        terkirim++;
       } catch(e) { console.log('Error kirim pengumuman:', e.message); }
     }
 
