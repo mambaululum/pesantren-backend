@@ -4,13 +4,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/db');
 
+// Login untuk santri/wali (tabel users)
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // ✅ Ganti 'users' → 'admins'
     const { data, error } = await supabase
-      .from('admins')
+      .from('users')
       .select('*')
       .eq('username', username)
       .single();
@@ -27,7 +27,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: data.id,
         nama: data.nama,
-        username: data.username  // ✅ Hapus nama_siswa & kelas (tidak ada di tabel admins)
+        nama_siswa: data.nama_siswa,
+        kelas: data.kelas
       }
     });
   } catch (err) {
