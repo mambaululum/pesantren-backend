@@ -19,13 +19,14 @@ const formatNomor = (nomor) => {
   return n;
 };
 
-const kirimWA = async (nomor, pesan) => {
+const kirimWA = async (nomor, pesan, meta = {}) => {
   if (!nomor || nomor.trim() === '') return;
   if (!process.env.FONNTE_TOKEN) {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
   const nomorFormatted = formatNomor(nomor);
+  let status = 'terkirim';
   try {
     const response = await fetch('https://api.fonnte.com/send', {
       method: 'POST',
@@ -34,9 +35,27 @@ const kirimWA = async (nomor, pesan) => {
     });
     const hasil = await response.json();
     console.log('WA kirim ke', nomorFormatted, ':', JSON.stringify(hasil));
-    if (!hasil.status) console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    if (!hasil.status) {
+      status = 'gagal';
+      console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    }
   } catch (e) {
+    status = 'gagal';
     console.log('WA error:', e.message);
+  }
+
+  // Simpan riwayat
+  try {
+    await supabase.from('riwayat_wa').insert([{
+      no_hp: nomorFormatted,
+      nama_wali: meta.nama_wali || '',
+      nama_siswa: meta.nama_siswa || '',
+      pesan,
+      status,
+      jenis: meta.jenis || 'notifikasi'
+    }]);
+  } catch (e) {
+    console.log('Riwayat WA error:', e.message);
   }
 };
 
@@ -849,5 +868,29 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
   }
 });
+// ============================================================
+// GET RIWAYAT NOTIFIKASI WA
+// ============================================================
+router.get('/riwayat-wa', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('riwayat_wa')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
+router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
+  try {
+    await supabase.from('riwayat_wa').delete().neq('id', 0);
+    res.json({ message: 'Riwayat WA berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;
