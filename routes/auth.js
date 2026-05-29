@@ -8,8 +8,9 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    // ✅ Ganti 'users' → 'admins'
     const { data, error } = await supabase
-      .from('users')
+      .from('admins')
       .select('*')
       .eq('username', username)
       .single();
@@ -26,8 +27,7 @@ router.post('/login', async (req, res) => {
       user: {
         id: data.id,
         nama: data.nama,
-        nama_siswa: data.nama_siswa,
-        kelas: data.kelas
+        username: data.username  // ✅ Hapus nama_siswa & kelas (tidak ada di tabel admins)
       }
     });
   } catch (err) {
