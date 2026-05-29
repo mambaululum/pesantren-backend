@@ -239,7 +239,8 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lakukan pembayaran.\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { jenis: 'tagihan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
       } catch (e) { console.log('WA notif error:', e.message); }
@@ -277,7 +278,8 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Terima kasih atas pembayarannya 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
       } catch (e) { console.log('WA notif error:', e.message); }
@@ -361,7 +363,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
             `Terima kasih atas pembayarannya 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
@@ -387,7 +390,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lunasi sisa pembayaran 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
-            `_Mojo - Andong - Boyolali_`
+            `_Mojo - Andong - Boyolali_`,
+            { jenis: 'cicilan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
@@ -650,7 +654,8 @@ router.post('/semester', verifyAdmin, async (req, res) => {
           `━━━━━━━━━━━━━━━━━━\n` +
           `Mohon segera lakukan pembayaran 🙏\n\n` +
           `_PP. Muhammadiyah Mambaul Ulum_\n` +
-          `_Mojo - Andong - Boyolali_`
+          `_Mojo - Andong - Boyolali_`,
+          { jenis: 'tagihan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
         );
       } catch (e) { console.log('WA semester error:', e.message); }
     }
@@ -774,9 +779,9 @@ const kirimPengingatSemua = async () => {
         `━━━━━━━━━━━━━━━━━━\n` +
         `Mohon segera lakukan pembayaran 🙏\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
-        `_Mojo - Andong - Boyolali_`
+        `_Mojo - Andong - Boyolali_`,
+        { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
       );
-      terkirim++;
     } catch (e) { console.log('WA pengingat error:', e.message); }
   }
   return terkirim;
@@ -830,7 +835,8 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `━━━━━━━━━━━━━━━━━━\n` +
       `Mohon segera lakukan pembayaran 🙏\n\n` +
       `_PP. Muhammadiyah Mambaul Ulum_\n` +
-      `_Mojo - Andong - Boyolali_`
+      `_Mojo - Andong - Boyolali_`,
+      { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
     );
     res.json({ message: `Pengingat berhasil dikirim ke ${u.nama} (${u.no_hp})` });
   } catch (err) {
@@ -862,7 +868,7 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     `_Mojo - Andong - Boyolali_`;
 
   try {
-    await kirimWA(no_hp, pesan);
+    await kirimWA(no_hp, pesan, { jenis: 'bayaran', nama_wali, nama_siswa });
     res.json({ message: 'Notifikasi WA berhasil dikirim' });
   } catch (e) {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
@@ -989,7 +995,7 @@ router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
             body: formData
           });
         } else {
-          await kirimWA(u.no_hp, pesanLengkap);
+          await kirimWA(u.no_hp, pesanLengkap, { jenis: 'pengumuman', nama_wali: u.nama, nama_siswa: u.nama_siswa });
         }
         terkirim++;
       } catch(e) { console.log('Error kirim pengumuman:', e.message); }
