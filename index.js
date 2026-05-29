@@ -13,21 +13,22 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/tagihan', tagihanRoutes);
 app.use('/api/admin', adminRoutes);
+
 app.get('/', (req, res) => {
   res.json({ message: 'Server sekolah berjalan!' });
 });
 
-const PORT = process.env.PORT || 5000;
 // CRON pengingat otomatis
 app.get('/api/cron/pengingat', async (req, res) => {
-  // auth disabled for test
   try {
-    // Import fungsi dari admin routes
-    res.json({ message: 'Cron berjalan - gunakan endpoint pengingat manual' });
+    const terkirim = await adminRoutes.kirimPengingatSemua();
+    res.json({ message: `Pengingat terkirim ke ${terkirim} wali`, terkirim });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 });
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server berjalan di port ${PORT}`);
 });
