@@ -108,11 +108,7 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error', detail: err.message });
   }
 });
-// DEBUG SEMENTARA
-router.get('/debug-admins', async (req, res) => {
-  const { data, error } = await supabase.from('admins').select('id, username, nama');
-  res.json({ data, error });
-});
+
 // ============================================================
 // GET SEMUA SANTRI
 // ============================================================
