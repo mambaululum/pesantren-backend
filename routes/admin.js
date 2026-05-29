@@ -989,15 +989,17 @@ router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
             filename: file_name,
             type: 'document',
           });
-          await fetch('https://api.fonnte.com/send', {
-            method: 'POST',
-            headers: { 'Authorization': process.env.FONNTE_TOKEN },
-            body: formData
-          });
+          const responsePDF = await fetch('https://api.fonnte.com/send', {
+  method: 'POST',
+  headers: { 'Authorization': process.env.FONNTE_TOKEN },
+  body: formData
+});
+const hasilPDF = await responsePDF.json();
+console.log('Fonnte PDF response:', JSON.stringify(hasilPDF));
         } else {
           await kirimWA(u.no_hp, pesanLengkap, { jenis: 'pengumuman', nama_wali: u.nama, nama_siswa: u.nama_siswa });
         }
-        terkirim++;
+        terkirim++;ad
       } catch(e) { console.log('Error kirim pengumuman:', e.message); }
     }
 
