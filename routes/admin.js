@@ -19,13 +19,14 @@ const formatNomor = (nomor) => {
   return n;
 };
 
-const kirimWA = async (nomor, pesan) => {
+const kirimWA = async (nomor, pesan, meta = {}) => {
   if (!nomor || nomor.trim() === '') return;
   if (!process.env.FONNTE_TOKEN) {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
   const nomorFormatted = formatNomor(nomor);
+  let status = 'terkirim';
   try {
     const response = await fetch('https://api.fonnte.com/send', {
       method: 'POST',
@@ -34,9 +35,27 @@ const kirimWA = async (nomor, pesan) => {
     });
     const hasil = await response.json();
     console.log('WA kirim ke', nomorFormatted, ':', JSON.stringify(hasil));
-    if (!hasil.status) console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    if (!hasil.status) {
+      status = 'gagal';
+      console.log('WA gagal:', hasil.reason || hasil.message || '-');
+    }
   } catch (e) {
+    status = 'gagal';
     console.log('WA error:', e.message);
+  }
+
+  // Simpan riwayat
+  try {
+    await supabase.from('riwayat_wa').insert([{
+      no_hp: nomorFormatted,
+      nama_wali: meta.nama_wali || '',
+      nama_siswa: meta.nama_siswa || '',
+      pesan,
+      status,
+      jenis: meta.jenis || 'notifikasi'
+    }]);
+  } catch (e) {
+    console.log('Riwayat WA error:', e.message);
   }
 };
 
@@ -849,5 +868,146 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: 'Gagal kirim WA: ' + e.message });
   }
 });
+// ============================================================
+// GET RIWAYAT NOTIFIKASI WA
+// ============================================================
+// HAPUS SEMUA RIWAYAT WA
+router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('riwayat_wa').delete().neq('id', 0);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: 'Semua riwayat notifikasi berhasil dihapus' });
+  } catch(e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+router.get('/riwayat-wa', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('riwayat_wa')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
+  try {
+    await supabase.from('riwayat_wa').delete().neq('id', 0);
+    res.json({ message: 'Riwayat WA berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+// ============================================================
+// GET RIWAYAT PEMBAYARAN
+// ============================================================
+router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase.rpc('get_riwayat_pembayaran');
+    if (error) {
+      // fallback manual join
+      const { data: pembayaran } = await supabase.from('pembayaran').select('*').order('tanggal_bayar', { ascending: false }).limit(200);
+      const result = await Promise.all((pembayaran || []).map(async (p) => {
+        const { data: t } = await supabase.from('tagihan').select('jenis, jumlah, user_id').eq('id', p.tagihan_id).single();
+        const { data: u } = await supabase.from('users').select('nama, nama_siswa, kelas').eq('id', t?.user_id).single();
+        return { id: p.id, tanggal_bayar: p.tanggal_bayar, jumlah_bayar: p.jumlah_bayar, keterangan: p.keterangan, jenis_tagihan: t?.jenis, total_tagihan: t?.jumlah, nama_siswa: u?.nama_siswa, nama_wali: u?.nama, kelas: u?.kelas };
+      }));
+      return res.json(result);
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+// ============================================================
+// CRON JOB PENGINGAT OTOMATIS
+// ============================================================
+router.get('/cron/pengingat', async (req, res) => {
+  // auth disabled for test
+  try {
+    const terkirim = await kirimPengingatSemua();
+    res.json({ message: `Pengingat terkirim ke ${terkirim} wali`, terkirim });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+// ============================================================
+// PENGUMUMAN & BROADCAST
+// ============================================================
+router.get('/pengumuman', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('pengumuman')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data || []);
+  } catch(e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
+  const { judul, pesan, target_ids, file_base64, file_name } = req.body;
+  if (!pesan) return res.status(400).json({ message: 'Pesan wajib diisi' });
+  if (!target_ids || target_ids.length === 0) return res.status(400).json({ message: 'Tidak ada penerima' });
+
+  try {
+    // Ambil data wali sesuai target
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, nama, nama_siswa, no_hp')
+      .in('id', target_ids)
+      .not('no_hp', 'is', null)
+      .neq('no_hp', '');
+
+    let terkirim = 0;
+    const pesanLengkap = (judul ? `*${judul}*\n\n` : '') +
+      pesan + '\n\n' +
+      '_PP. Muhammadiyah Mambaul Ulum_\n' +
+      '_Mojo - Andong - Boyolali_';
+
+    for (const u of (users || [])) {
+      try {
+        if (file_base64 && file_name) {
+          // Kirim dengan dokumen PDF
+          const formData = new URLSearchParams({
+            target: u.no_hp,
+            message: pesanLengkap,
+            file: file_base64,
+            filename: file_name,
+            type: 'document',
+          });
+          await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: { 'Authorization': process.env.FONNTE_TOKEN },
+            body: formData
+          });
+        } else {
+          await kirimWA(u.no_hp, pesanLengkap);
+        }
+        terkirim++;
+      } catch(e) { console.log('Error kirim pengumuman:', e.message); }
+    }
+
+    // Simpan ke riwayat pengumuman
+    await supabase.from('pengumuman').insert([{
+      judul: judul || 'Pengumuman',
+      pesan,
+      terkirim,
+      total_target: target_ids.length,
+    }]);
+
+    res.json({ message: `Pengumuman berhasil dikirim ke ${terkirim} wali santri`, terkirim });
+  } catch(e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 
 module.exports = router;
+module.exports.kirimPengingatSemua = kirimPengingatSemua;
