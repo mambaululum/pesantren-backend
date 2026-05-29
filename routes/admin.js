@@ -898,26 +898,18 @@ router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
 // ============================================================
 router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('pembayaran')
-      .select('*, tagihan(jenis, jumlah, users(nama, nama_siswa, kelas))')
-      .order('tanggal_bayar', { ascending: false })
-      .limit(200);
-    if (error) return res.status(500).json({ message: error.message });
-
-    const result = data.map(p => ({
-      id: p.id,
-      tanggal_bayar: p.tanggal_bayar,
-      jumlah_bayar: p.jumlah_bayar,
-      keterangan: p.keterangan,
-      jenis_tagihan: p.tagihan?.jenis,
-      total_tagihan: p.tagihan?.jumlah,
-      nama_siswa: p.tagihan?.users?.nama_siswa,
-      nama_wali: p.tagihan?.users?.nama,
-      kelas: p.tagihan?.users?.kelas,
-    }));
-
-    res.json(result);
+    const { data, error } = await supabase.rpc('get_riwayat_pembayaran');
+    if (error) {
+      // fallback manual join
+      const { data: pembayaran } = await supabase.from('pembayaran').select('*').order('tanggal_bayar', { ascending: false }).limit(200);
+      const result = await Promise.all((pembayaran || []).map(async (p) => {
+        const { data: t } = await supabase.from('tagihan').select('jenis, jumlah, user_id').eq('id', p.tagihan_id).single();
+        const { data: u } = await supabase.from('users').select('nama, nama_siswa, kelas').eq('id', t?.user_id).single();
+        return { id: p.id, tanggal_bayar: p.tanggal_bayar, jumlah_bayar: p.jumlah_bayar, keterangan: p.keterangan, jenis_tagihan: t?.jenis, total_tagihan: t?.jumlah, nama_siswa: u?.nama_siswa, nama_wali: u?.nama, kelas: u?.kelas };
+      }));
+      return res.json(result);
+    }
+    res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
