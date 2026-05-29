@@ -914,4 +914,20 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// ============================================================
+// CRON JOB PENGINGAT OTOMATIS
+// ============================================================
+router.get('/cron/pengingat', async (req, res) => {
+  // Verifikasi request dari Vercel Cron
+  const authHeader = req.headers['authorization'];
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  try {
+    const terkirim = await kirimPengingatSemua();
+    res.json({ message: `Pengingat terkirim ke ${terkirim} wali`, terkirim });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 module.exports = router;
