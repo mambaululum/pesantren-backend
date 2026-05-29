@@ -893,4 +893,33 @@ router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// ============================================================
+// GET RIWAYAT PEMBAYARAN
+// ============================================================
+router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('pembayaran')
+      .select('*, tagihan(jenis, jumlah, users(nama, nama_siswa, kelas))')
+      .order('tanggal_bayar', { ascending: false })
+      .limit(200);
+    if (error) return res.status(500).json({ message: error.message });
+
+    const result = data.map(p => ({
+      id: p.id,
+      tanggal_bayar: p.tanggal_bayar,
+      jumlah_bayar: p.jumlah_bayar,
+      keterangan: p.keterangan,
+      jenis_tagihan: p.tagihan?.jenis,
+      total_tagihan: p.tagihan?.jumlah,
+      nama_siswa: p.tagihan?.users?.nama_siswa,
+      nama_wali: p.tagihan?.users?.nama,
+      kelas: p.tagihan?.users?.kelas,
+    }));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;
