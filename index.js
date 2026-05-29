@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const tagihanRoutes = require('./routes/tagihan');
 const adminRoutes = require('./routes/admin');
+
 dotenv.config();
 const app = express();
 
@@ -18,7 +19,6 @@ app.get('/', (req, res) => {
   res.json({ message: 'Server sekolah berjalan!' });
 });
 
-// CRON pengingat otomatis
 app.get('/api/cron/pengingat', async (req, res) => {
   try {
     const terkirim = await adminRoutes.kirimPengingatSemua();
@@ -28,7 +28,13 @@ app.get('/api/cron/pengingat', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server berjalan di port ${PORT}`);
-});
+// ✅ Untuk local development
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server berjalan di port ${PORT}`);
+  });
+}
+
+// ✅ Wajib untuk Vercel
+module.exports = app;
