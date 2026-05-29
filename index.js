@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const tagihanRoutes = require('./routes/tagihan');
 const adminRoutes = require('./routes/admin');
+const { kirimPengingatSemua } = require('./routes/admin');
 
 dotenv.config();
 const app = express();
@@ -21,14 +22,14 @@ app.get('/', (req, res) => {
 
 app.get('/api/cron/pengingat', async (req, res) => {
   try {
-    const terkirim = await adminRoutes.kirimPengingatSemua();
+    const terkirim = await kirimPengingatSemua();
     res.json({ message: `Pengingat terkirim ke ${terkirim} wali`, terkirim });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 });
 
-// ✅ Untuk local development
+// Untuk local development
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
@@ -36,5 +37,5 @@ if (require.main === module) {
   });
 }
 
-// ✅ Wajib untuk Vercel
+// Wajib untuk Vercel
 module.exports = app;
