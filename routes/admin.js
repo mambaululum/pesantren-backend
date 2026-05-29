@@ -967,9 +967,14 @@ router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
       .neq('no_hp', '');
 
     let terkirim = 0;
-    const pesanLengkap = (judul ? `*${judul}*\n\n` : '') +
-      pesan + '\n\n' +
-      '_PP. Muhammadiyah Mambaul Ulum_\n' +
+    const pesanLengkap = (judul ? `*${judul}*
+
+` : '') +
+      pesan + '
+
+' +
+      '_PP. Muhammadiyah Mambaul Ulum_
+' +
       '_Mojo - Andong - Boyolali_';
 
     for (const u of (users || [])) {
