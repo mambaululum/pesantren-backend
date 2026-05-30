@@ -233,7 +233,7 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `📋 *Informasi Tagihan Baru*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `👤 Santri           : *${u.nama_siswa}*\n` +
-            `📚 Jenis Pembayaran : *${jenis}*\n` +
+             `📚 Tagihan : *${t.jenis}*\n` +
             `💰 Jumlah           : *Rp ${formatRp(jumlah)}*\n` +
             `⏳ Status           : Belum Dibayar\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
@@ -396,7 +396,13 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `━━━━━━━━━━━━━━━━━━\n` +
             `💳 Total kekurangan semua tagihan: *Rp ${formatRp(totalKekurangan)}*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Mohon segera lunasi sisa pembayaran 🙏\n\n` +
+           `Mohon segera lunasi sisa pembayaran ke bagian administrasi pondok atau transfer:\n\n` +
+            `🏦 *Bank BRI*\n` +
+            `📋 No. Rek : *6665 0101 4641 533*\n` +
+            `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+            `📱 Konfirmasi Pembayaran:\n` +
+            `☎️ Hubungi : *081393695901*\n\n` +
+            `Terima kasih 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'cicilan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
