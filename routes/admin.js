@@ -282,7 +282,8 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
             `Tanggal : ${tanggal_bayar || '-'}\n` +
             `Status  : ✅ *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Terima kasih atas pembayarannya 🙏\n\n` +
+            `Terima kasih atas pembayarannya 🙏\n` +
+            `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
@@ -367,7 +368,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             (totalKekurangan > 0
               ? `⚠️ Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n`
               : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
-            `Terima kasih atas pembayarannya 🙏\n\n` +
+            `Terima kasih atas pembayarannya 🙏\n` +
+            `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
