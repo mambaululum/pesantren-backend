@@ -232,12 +232,18 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `📋 *Informasi Tagihan Baru*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${jenis}*\n` +
+            `Santri          : *${u.nama_siswa}*\n` +
+            `Jenis Pembayaran : *${t.jenis}*\n` +
             `Jumlah  : *Rp ${formatRp(jumlah)}*\n` +
             `Status  : ⏳ Belum Dibayar\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Mohon segera lakukan pembayaran.\n\n` +
+            `Mohon segera lakukan pembayaran ke bagian administrasi pondok atau transfer:\n\n` +
+            `🏦 *Bank BRI*\n` +
+            `📋 No. Rek : *6665 0101 4641 533*\n` +
+            `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+            `📱 Konfirmasi Pembayaran:\n` +
+            `☎️ Hubungi : *081393695901*\n\n` +
+            `Terima kasih 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'tagihan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
@@ -267,16 +273,25 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
         if (u && u.no_hp) {
           await kirimWA(u.no_hp,
+           `🧾 *KWITANSI PEMBAYARAN*\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
-            `✅ *Konfirmasi Pembayaran Lunas*\n` +
+            `✅ Pembayaran telah diterima dan tercatat.\n\n` +
+            `👤 Santri          : *${u.nama_siswa}*\n` +
+            `📚 Jenis Pembayaran : *${t.jenis}*\n` +
+            `💵 Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
+            `💰 Total   : *Rp ${formatRp(t.jumlah)}*\n` +
+            `📅 Tanggal : ${tanggal_bayar}\n` +
+            `✅ Status  : *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${jenis}*\n` +
-            `Jumlah  : *Rp ${formatRp(jumlah)}*\n` +
-            `Tanggal : ${tanggal_bayar || '-'}\n` +
-            `Status  : ✅ *LUNAS*\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            (totalKekurangan > 0
+              ? `⚠️ Masih ada kekurangan tagihan lain:\n*Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n`
+              : `🎉 *Semua tagihan sudah lunas!*\n━━━━━━━━━━━━━━━━━━\n`) +
             `Terima kasih atas pembayarannya 🙏\n\n` +
+            `_PP. Muhammadiyah Mambaul Ulum_\n` +
+            `_Mojo - Andong - Boyolali_`,
+            `Terima kasih atas pembayarannya 🙏\n` +
+            `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
@@ -348,20 +363,19 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         if (u && u.no_hp) {
           const totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
-           `🧾 *KWITANSI PEMBAYARAN*\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
-            `✅ Pembayaran telah diterima dan tercatat.\n\n` +
-            `👤 Santri          : *${u.nama_siswa}*\n` +
-            `📚 Jenis Pembayaran : *${t.jenis}*\n` +
-            `💵 Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
-            `💰 Total   : *Rp ${formatRp(t.jumlah)}*\n` +
-            `📅 Tanggal : ${tanggal_bayar}\n` +
-            `✅ Status  : *LUNAS*\n` +
+            `✅ *Pembayaran Berhasil - LUNAS*\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `Santri          : *${u.nama_siswa}*\n` +
+            `Jenis Pembayaran : *${t.jenis}*\n` +
+            `Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
+            `Total   : *Rp ${formatRp(t.jumlah)}*\n` +
+            `Tanggal : ${tanggal_bayar}\n` +
+            `Status  : ✅ *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             (totalKekurangan > 0
-              ? `⚠️ Masih ada kekurangan tagihan lain:\n*Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n`
-              : `🎉 *Semua tagihan sudah lunas!*\n━━━━━━━━━━━━━━━━━━\n`) +
+              ? `⚠️ Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n`
+              : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
             `Terima kasih atas pembayarannya 🙏\n` +
             `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
@@ -382,8 +396,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `💰 *Pembayaran Diterima (Cicilan)*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${t.jenis}*\n` +
+            `Santri          : *${u.nama_siswa}*\n` +
+            `Jenis Pembayaran : *${t.jenis}*\n` +
             `Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
             `Sisa tagihan ini : ⚠️ *Rp ${formatRp(sisa)}*\n` +
             `Tanggal : ${tanggal_bayar}\n` +
