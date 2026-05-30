@@ -1016,10 +1016,15 @@ if (file_base64 && file_name) {
       try {
         if (publicUrl && file_name) {
   // Kirim dengan dokumen PDF
-  const formData = new FormData();
+  // Download PDF dari Supabase dulu, lalu kirim ke Fonnte sebagai base64
+const pdfResponse = await fetch(publicUrl);
+const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+const pdfBase64 = Buffer.from(pdfArrayBuffer).toString('base64');
+
+const formData = new FormData();
 formData.append('target', u.no_hp);
 formData.append('message', pesanLengkap);
-formData.append('file', publicUrl);
+formData.append('file', `data:application/pdf;base64,${pdfBase64}`);
 formData.append('filename', file_name);
 formData.append('type', 'document');
           const responsePDF = await fetch('https://api.fonnte.com/send', {
