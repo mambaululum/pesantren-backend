@@ -355,21 +355,20 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         if (u && u.no_hp) {
           const totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
+            `🧾 *KWITANSI PEMBAYARAN*\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
-            `✅ *Pembayaran Berhasil - LUNAS*\n` +
+            `Berikut kwitansi pembayaran santri:\n\n` +
+            `👤 Nama Santri      : *${u.nama_siswa}*\n` +
+            `📚 Jenis Pembayaran : *${t.jenis}*\n` +
+            `💵 Jumlah Dibayar   : *Rp ${formatRp(jumlah_bayar)}*\n` +
+            `💰 Total Tagihan    : *Rp ${formatRp(t.jumlah)}*\n` +
+            `📅 Tanggal Bayar    : ${tanggal_bayar}\n` +
+            `✅ Status           : *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${t.jenis}*\n` +
-            `Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
-            `Total   : *Rp ${formatRp(t.jumlah)}*\n` +
-            `Tanggal : ${tanggal_bayar}\n` +
-            `Status  : ✅ *LUNAS*\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            (totalKekurangan > 0
-              ? `⚠️ Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n`
-              : `🎉 Semua tagihan sudah lunas!\n━━━━━━━━━━━━━━━━━━\n`) +
             `Terima kasih atas pembayarannya 🙏\n` +
-            `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
+            `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+            `_dan melapangkan rizqi Bapak/Ibu_ 🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
