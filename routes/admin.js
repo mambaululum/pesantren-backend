@@ -961,30 +961,27 @@ router.get('/pengumuman', verifyAdmin, async (req, res) => {
 router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
   const { judul, pesan, target_ids, file_base64, file_name } = req.body;
 
+if (!pesan) return res.status(400).json({ message: 'Pesan wajib diisi' });
+if (!target_ids || target_ids.length === 0) return res.status(400).json({ message: 'Tidak ada penerima' });
+
 // Upload PDF ke Supabase Storage jika ada
 let publicUrl = null;
 if (file_base64 && file_name) {
   const base64Data = file_base64.includes(',') ? file_base64.split(',')[1] : file_base64;
   const pdfBuffer = Buffer.from(base64Data, 'base64');
   const filePath = `pdf/${Date.now()}_${file_name}`;
-console.log('Mencoba upload PDF:', filePath, 'size:', pdfBuffer.length);
 
-const { data: uploadData, error: uploadError } = await supabase
-  .storage
-  .from('pengumuman')
-  .upload(filePath, pdfBuffer, {
-    contentType: 'application/pdf',
-    upsert: true
-  });
+  console.log('Mencoba upload PDF:', filePath, 'size:', pdfBuffer.length);
 
-console.log('Upload result:', JSON.stringify(uploadData), JSON.stringify(uploadError));
   const { data: uploadData, error: uploadError } = await supabase
     .storage
-    .from('pengumuman') // nama bucket yang tadi dibuat
+    .from('pengumuman')
     .upload(filePath, pdfBuffer, {
       contentType: 'application/pdf',
       upsert: true
     });
+
+  console.log('Upload result:', JSON.stringify(uploadData), JSON.stringify(uploadError));
 
   if (uploadError) {
     console.error('Upload PDF error:', uploadError);
