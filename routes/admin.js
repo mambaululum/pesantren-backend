@@ -1016,13 +1016,12 @@ if (file_base64 && file_name) {
       try {
         if (publicUrl && file_name) {
   // Kirim dengan dokumen PDF
-  const formData = new URLSearchParams({
-    target: u.no_hp,
-    message: pesanLengkap,
-    file: publicUrl,
-    filename: file_name,
-    type: 'document',
-  });
+  const formData = new FormData();
+formData.append('target', u.no_hp);
+formData.append('message', pesanLengkap);
+formData.append('file', publicUrl);
+formData.append('filename', file_name);
+formData.append('type', 'document');
           const responsePDF = await fetch('https://api.fonnte.com/send', {
   method: 'POST',
   headers: { 'Authorization': process.env.FONNTE_TOKEN },
