@@ -876,7 +876,12 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     `🎉 Sisa Uang     : *Rp ${formatRp(kelebihan)}*\n` +
     `📝 Ket           : ${keterangan}\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
-    `Jazakumullahu khairan 🙏\n\n` +
+    (totalKekurangan > 0
+    ? `⚠️ *Info:* Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n`
+    : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n`) +
+    `Terima kasih atas pembayarannya 🙏\n` +
+    `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+    `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
     `_PP. Muhammadiyah Mambaul Ulum_\n` +
     `_Mojo - Andong - Boyolali_`;
 
