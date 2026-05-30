@@ -232,12 +232,18 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `📋 *Informasi Tagihan Baru*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${jenis}*\n` +
-            `Jumlah  : *Rp ${formatRp(jumlah)}*\n` +
-            `Status  : ⏳ Belum Dibayar\n` +
+            `👤 Santri           : *${u.nama_siswa}*\n` +
+            `📚 Jenis Pembayaran : *${jenis}*\n` +
+            `💰 Jumlah           : *Rp ${formatRp(jumlah)}*\n` +
+            `⏳ Status           : Belum Dibayar\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `Mohon segera lakukan pembayaran.\n\n` +
+            `Mohon segera lakukan pembayaran ke bagian administrasi pondok atau transfer:\n\n` +
+            `🏦 *Bank BRI*\n` +
+            `📋 No. Rek : *6665 0101 4641 533*\n` +
+            `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+            `📱 Konfirmasi Pembayarasn:\n` +
+            `☎️ Hubungi : *081393695901*\n\n` +
+            `Terima kasih 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
             { jenis: 'tagihan', nama_wali: u.nama, nama_siswa: u.nama_siswa }
