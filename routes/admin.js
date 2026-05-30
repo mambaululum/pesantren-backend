@@ -968,6 +968,16 @@ if (file_base64 && file_name) {
   const pdfBuffer = Buffer.from(base64Data, 'base64');
   const filePath = `pdf/${Date.now()}_${file_name}`;
 console.log('Mencoba upload PDF:', filePath, 'size:', pdfBuffer.length);
+
+const { data: uploadData, error: uploadError } = await supabase
+  .storage
+  .from('pengumuman')
+  .upload(filePath, pdfBuffer, {
+    contentType: 'application/pdf',
+    upsert: true
+  });
+
+console.log('Upload result:', JSON.stringify(uploadData), JSON.stringify(uploadError));
   const { data: uploadData, error: uploadError } = await supabase
     .storage
     .from('pengumuman') // nama bucket yang tadi dibuat
