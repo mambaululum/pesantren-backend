@@ -371,7 +371,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
-            { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
+            { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
