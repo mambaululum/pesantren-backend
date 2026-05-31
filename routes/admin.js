@@ -516,6 +516,7 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
 
     const kelebihan = sisaUang; // sisa uang setelah semua tagihan terbayar
     const totalKekurangan = await getTotalKekurangan(user_id);
+    const totalKekurangan = await getTotalKekurangan(user_id);
 
     // Kirim response dulu sebelum kirim WA
     res.json({ message: 'Pembayaran bulk berhasil', lunas: lunasList.length, cicilan: cicilanItem, kelebihan });
