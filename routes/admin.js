@@ -861,8 +861,11 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
 // KIRIM WA NOTIFIKASI KELEBIHAN BAYAR
 // ============================================================
 router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
-  const { no_hp, nama_wali, nama_siswa, jumlah_bayar, jumlah_tagihan, kelebihan, keterangan } = req.body;
+  const { no_hp, nama_wali, nama_siswa, jumlah_bayar, jumlah_tagihan, kelebihan, keterangan, user_id } = req.body;
   if (!no_hp) return res.status(400).json({ message: 'Nomor HP tidak ada' });
+
+  // Ambil total kekurangan
+  const totalKekurangan = user_id ? await getTotalKekurangan(user_id) : 0;
 
   const pesan =
     `Assalamu'alaikum Bapak/Ibu *${nama_wali}*,\n\n` +
