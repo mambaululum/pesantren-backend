@@ -149,7 +149,7 @@ router.post('/santri', verifyAdmin, async (req, res) => {
   try {
     const { username, password, nama, nama_siswa, kelas, no_hp } = req.body;
     const hash = await bcrypt.hash(password, 10);
-    const { data, error } = await supabase.from('users').insert([{ username, password: hash, nama, nama_siswa, kelas, no_hp: no_hp || '' }]).select('id').single();
+    const { data, error } = await supabase.from('users').insert([{ username, password: hash, password_plain: password, nama, nama_siswa, kelas, no_hp: no_hp || '' }]).select('id').single();
     if (error) return res.status(500).json({ message: error.message });
     res.json({ message: 'Santri berhasil ditambahkan', id: data.id });
   } catch (err) {
@@ -162,9 +162,12 @@ router.post('/santri', verifyAdmin, async (req, res) => {
 // ============================================================
 router.put('/santri/:id', verifyAdmin, async (req, res) => {
   try {
-    const { nama, nama_siswa, kelas, password, no_hp } = req.body;
-    const updateData = { nama, nama_siswa, kelas, no_hp: no_hp || '' };
-    if (password) updateData.password = await bcrypt.hash(password, 10);
+    const { nama, nama_siswa, kelas, password, no_hp, username } = req.body;
+    const updateData = { nama, nama_siswa, kelas, no_hp: no_hp || '', username };
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+      updateData.password_plain = password;
+    }
     const { error } = await supabase.from('users').update(updateData).eq('id', req.params.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ message: 'Data santri berhasil diupdate' });
