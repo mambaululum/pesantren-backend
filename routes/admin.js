@@ -388,7 +388,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `💰 *Pembayaran Diterima (Cicilan)*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `Santri  : *${u.nama_siswa}*\n` +
-            `Tagihan : *${t.jenis}*\n` +
+            `Tagihan : *${t.jenis.trim()}*\n` +
             `Dibayar : *Rp ${formatRp(jumlah_bayar)}*\n` +
             `Sisa tagihan ini : ⚠️ *Rp ${formatRp(sisa)}*\n` +
             `Tanggal : ${tanggal_bayar}\n` +
