@@ -517,7 +517,10 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
     const kelebihan = sisaUang; // sisa uang setelah semua tagihan terbayar
     const totalKekurangan = await getTotalKekurangan(user_id);
 
-    // Kirim WA Kwitansi jika ada yang lunas
+    // Kirim response dulu sebelum kirim WA
+    res.json({ message: 'Pembayaran bulk berhasil', lunas: lunasList.length, cicilan: cicilanItem, kelebihan });
+
+    // Kirim WA secara async (tidak blocking)
     if (kirim_notif !== false && u.no_hp && lunasList.length > 0) {
       const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n');
       await kirimWA(u.no_hp,
@@ -578,8 +581,7 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
       );
     }
 
-    res.json({ message: 'Pembayaran bulk berhasil', lunas: lunasList.length, cicilan: cicilanItem, kelebihan });
-  } catch (err) {
+    } catch (err) {
     console.error('Pembayaran bulk error:', err.message);
     res.status(500).json({ message: err.message });
   }
