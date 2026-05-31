@@ -315,6 +315,7 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
         if (u && u.no_hp) {
+          const totalKekurangan = await getTotalKekurangan(u.id);
           await kirimWA(u.no_hp,
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `✅ *Konfirmasi Pembayaran Lunas*\n` +
@@ -325,6 +326,17 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
             `Tanggal : ${tanggal_bayar || '-'}\n` +
             `Status  : ✅ *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
+            (totalKekurangan > 0
+              ? `⚠️ *Masih ada kekurangan tagihan lain:*\n` +
+                `💰 Total Kekurangan : *Rp ${formatRp(totalKekurangan)}*\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
+                `🏦 *Bank BRI*\n` +
+                `📋 No. Rek : *6665 0101 4641 533*\n` +
+                `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+                `📱 Konfirmasi Pembayaran:\n` +
+                `☎️ Hubungi : *081393695901*\n\n`
+              : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n\n`) +
             `Terima kasih atas pembayarannya 🙏\n` +
             `_Jazakumullah Khoiron, Semoga Allah memudahkan dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
