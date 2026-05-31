@@ -544,6 +544,8 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
 
     // Kirim WA Konfirmasi
     if (u.no_hp) {
+      const rincianKonfirmasi = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n') +
+        (cicilanItem ? `\n• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan)` : '');
       await kirimWA(u.no_hp,
         `✅ *Konfirmasi Pembayaran*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
@@ -551,6 +553,8 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
         `Santri       : *${u.nama_siswa}*\n` +
         `Total Bayar  : *Rp ${formatRp(jumlah_total)}*\n` +
         `Tanggal      : ${tanggal_bayar}\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `📋 *Rincian Pembayaran:*\n${rincianKonfirmasi}\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         (cicilanItem
           ? `⚠️ *${cicilanItem.jenis}* masih sisa: *Rp ${formatRp(cicilanItem.sisa)}*\n━━━━━━━━━━━━━━━━━━\n`
