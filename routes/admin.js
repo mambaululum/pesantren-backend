@@ -406,7 +406,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         if (u && u.no_hp) {
-          const totalKekurangan = await getTotalKekurangan(t.user_id);
+          let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
             `🧾 *KWITANSI PEMBAYARAN*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
@@ -437,7 +437,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         console.log('Cicilan: user data:', JSON.stringify(u));
         if (u && u.no_hp) {
-          const totalKekurangan = await getTotalKekurangan(t.user_id);
+          let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `💰 *Pembayaran Diterima (Cicilan)*\n` +
@@ -515,7 +515,6 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
     }
 
     const kelebihan = sisaUang; // sisa uang setelah semua tagihan terbayar
-    const totalKekurangan = await getTotalKekurangan(user_id);
     const totalKekurangan = await getTotalKekurangan(user_id);
 
     // Kirim response dulu sebelum kirim WA
