@@ -175,7 +175,47 @@ router.put('/santri/:id', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// ============================================================
+// KIRIM INFO AKUN KE WALI VIA WA
+// ============================================================
+router.post('/santri/kirim-akun', verifyAdmin, async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    const { data: u } = await supabase.from('users').select('*').eq('id', user_id).single();
+    if (!u) return res.status(404).json({ message: 'Santri tidak ditemukan' });
+    if (!u.no_hp) return res.status(400).json({ message: 'Nomor WA wali belum diisi' });
 
+    const pesan =
+      `🔐 *Info Akun Aplikasi Keuangan Santri*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
+      `Semoga Bapak/Ibu dalam keadaan sehat dan baik. 🤲\n\n` +
+      `Kami informasikan bahwa kini tersedia *Aplikasi Keuangan Santri* yang dapat digunakan untuk memantau tagihan dan riwayat pembayaran putra/putri Bapak/Ibu kapan saja dan di mana saja.\n\n` +
+      `📱 *Cara Menggunakan:*\n` +
+      `1️⃣ Buka link berikut di browser HP:\n` +
+      `👉 https://pesantren-frontend.vercel.app\n` +
+      `2️⃣ Login menggunakan akun di bawah ini\n` +
+      `3️⃣ Klik tombol *"Install Aplikasi"* yang tersedia\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `🔑 *Data Akun:*\n` +
+      `👤 Nama Santri : *${u.nama_siswa}*\n` +
+      `📋 Username    : *${u.username}*\n` +
+      `🔒 Password    : *${u.password_plain || '-'}*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `✨ *Fitur Aplikasi:*\n` +
+      `✅ Lihat tagihan & status pembayaran\n` +
+      `✅ Riwayat pembayaran lengkap\n` +
+      `✅ Notifikasi langsung via WhatsApp\n\n` +
+      `Jazakumullah Khoiron atas kepercayaan Bapak/Ibu 🙏\n\n` +
+      `_PP. Muhammadiyah Mambaul Ulum_\n` +
+      `_Mojo - Andong - Boyolali_`;
+
+    await kirimWA(u.no_hp, pesan, { jenis: 'info_akun', nama_wali: u.nama, nama_siswa: u.nama_siswa });
+    res.json({ message: 'Info akun berhasil dikirim ke WA wali' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 // ============================================================
 // HAPUS SANTRI
 // ============================================================
