@@ -1055,11 +1055,18 @@ router.post('/kirim-wa-kelebihan', verifyAdmin, async (req, res) => {
     `📝 Ket           : ${keterangan}\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     (totalKekurangan > 0
-    ? `⚠️ *Info:* Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n`
-    : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n`) +
-    `Terima kasih atas pembayarannya 🙏\n` +
-    `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
-    `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
+    ? `⚠️ *Info:* Masih ada kekurangan tagihan lain: *Rp ${formatRp(totalKekurangan)}*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
+      `🏦 *Bank BRI*\n` +
+      `📋 No. Rek : *6665 0101 4641 533*\n` +
+      `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+      `📱 Konfirmasi Pembayaran:\n` +
+      `☎️ Hubungi : *081393695901*\n\n`
+    : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n\n` +
+      `Terima kasih atas pembayarannya 🙏\n` +
+      `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+      `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n`) +
     `_PP. Muhammadiyah Mambaul Ulum_\n` +
     `_Mojo - Andong - Boyolali_`;
 
