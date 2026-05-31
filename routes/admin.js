@@ -477,7 +477,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 // ============================================================
 router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
   try {
-    const { user_id, tagihan_ids, jumlah_total, tanggal_bayar, keterangan } = req.body;
+    const { user_id, tagihan_ids, jumlah_total, tanggal_bayar, keterangan, metode_bayar, kirim_notif } = req.body;
     if (!tagihan_ids || tagihan_ids.length === 0) return res.status(400).json({ message: 'Pilih minimal 1 tagihan' });
 
     const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
@@ -518,7 +518,7 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
     const totalKekurangan = await getTotalKekurangan(user_id);
 
     // Kirim WA Kwitansi jika ada yang lunas
-    if (u.no_hp && lunasList.length > 0) {
+    if (kirim_notif !== false && u.no_hp && lunasList.length > 0) {
       const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n');
       await kirimWA(u.no_hp,
         `🧾 *KWITANSI PEMBAYARAN*\n` +
@@ -528,6 +528,7 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
         `👤 Nama Santri    : *${u.nama_siswa}*\n` +
         `📅 Tanggal Bayar  : ${tanggal_bayar}\n` +
         `💵 Total Dibayar  : *Rp ${formatRp(jumlah_total)}*\n` +
+        `💳 Metode         : *${metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai'}*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `📋 *Rincian Pembayaran:*\n${rincianLunas}\n` +
         (cicilanItem ? `• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan)\n` : '') +
@@ -543,7 +544,7 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
     }
 
     // Kirim WA Konfirmasi
-    if (u.no_hp) {
+    if (kirim_notif !== false && u.no_hp) {
       const rincianKonfirmasi = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n') +
         (cicilanItem ? `\n• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan)` : '');
       await kirimWA(u.no_hp,
