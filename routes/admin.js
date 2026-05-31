@@ -983,7 +983,7 @@ router.get('/pengumuman', verifyAdmin, async (req, res) => {
 });
 
 router.post('/pengumuman/kirim', verifyAdmin, async (req, res) => {
-  const { judul, pesan, target_ids, file_base64, file_name } = req.body;
+  const { judul, pesan, target_ids, file_base64, file_name, grup_id } = req.body;
 
 if (!pesan) return res.status(400).json({ message: 'Pesan wajib diisi' });
 if (!target_ids || target_ids.length === 0) return res.status(400).json({ message: 'Tidak ada penerima' });
@@ -1058,6 +1058,21 @@ console.log('Fonnte PDF response:', JSON.stringify(hasilPDF));
       } catch(e) { console.log('Error kirim pengumuman:', e.message); }
     }
 
+    // Kirim ke grup WA jika ada
+    if (grup_id && grup_id.trim() !== '') {
+      try {
+        const formDataGrup = new FormData();
+        formDataGrup.append('target', grup_id.trim());
+        formDataGrup.append('message', pesanLengkap + (publicUrl ? `\n\n📎 Lampiran PDF:\n${publicUrl}` : ''));
+        const resGrup = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: { 'Authorization': process.env.FONNTE_TOKEN },
+          body: formDataGrup
+        });
+        const hasilGrup = await resGrup.json();
+        console.log('Fonnte Grup response:', JSON.stringify(hasilGrup));
+      } catch(e) { console.log('Error kirim grup:', e.message); }
+    }
     // Simpan ke riwayat pengumuman
     await supabase.from('pengumuman').insert([{
       judul: judul || 'Pengumuman',
