@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const tagihanRoutes = require('./routes/tagihan');
 const adminRoutes = require('./routes/admin');
+const webhookRoutes = require('./routes/webhook');
 const { kirimPengingatSemua } = require('./routes/admin');
 
 dotenv.config();

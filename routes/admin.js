@@ -391,8 +391,6 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 
     if (total_bayar >= Number(t.jumlah)) {
       await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', tagihan_id);
-      res.json({ message: 'Pembayaran berhasil, tagihan LUNAS!', lunas: true });
-
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         if (u && u.no_hp) {
@@ -419,9 +417,9 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         }
       } catch (e) { console.log('WA error:', e.message); }
 
-    } else {
-      res.json({ message: `Pembayaran dicatat. Sisa: Rp ${sisa.toLocaleString('id-ID')}`, lunas: false, sisa });
+      res.json({ message: 'Pembayaran berhasil, tagihan LUNAS!', lunas: true });
 
+    } else {
       try {
         console.log('Cicilan: mencoba kirim WA, user_id:', t.user_id);
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
@@ -453,6 +451,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
+
+      res.json({ message: `Pembayaran dicatat. Sisa: Rp ${sisa.toLocaleString('id-ID')}`, lunas: false, sisa });
     }
   } catch (err) {
     console.error('Pembayaran error:', err.message);
