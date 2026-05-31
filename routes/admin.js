@@ -233,7 +233,7 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `📋 *Informasi Tagihan Baru*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `👤 Santri           : *${u.nama_siswa}*\n` +
-             `📚 Tagihan : *${t.jenis}*\n` +
+             `📚 Tagihan : *${jenis}*\n` +
             `💰 Jumlah           : *Rp ${formatRp(jumlah)}*\n` +
             `⏳ Status           : Belum Dibayar\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
