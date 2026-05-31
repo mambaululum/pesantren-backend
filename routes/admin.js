@@ -360,7 +360,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
             `Berikut kwitansi pembayaran santri:\n\n` +
             `👤 Nama Santri      : *${u.nama_siswa}*\n` +
-            `📚 Jenis Pembayaran : *${t.jenis}*\n` +
+            `📚 Pembayaran : *${t.jenis}*\n` +
             `💵 Jumlah Dibayar   : *Rp ${formatRp(jumlah_bayar)}*\n` +
             `💰 Total Tagihan    : *Rp ${formatRp(t.jumlah)}*\n` +
             `📅 Tanggal Bayar    : ${tanggal_bayar}\n` +
