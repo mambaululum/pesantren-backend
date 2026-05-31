@@ -568,7 +568,9 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
             `📱 Konfirmasi Pembayaran:\n` +
             `☎️ Hubungi : *081393695901*\n\n`
           : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n\n`) +
-        `Terima kasih 🙏\n` +
+        `Terima kasih atas pembayarannya 🙏\n` +
+        `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+        `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
         { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
