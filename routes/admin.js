@@ -380,7 +380,9 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
       res.json({ message: `Pembayaran dicatat. Sisa: Rp ${sisa.toLocaleString('id-ID')}`, lunas: false, sisa });
 
       try {
+        console.log('Cicilan: mencoba kirim WA, user_id:', t.user_id);
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
+        console.log('Cicilan: user data:', JSON.stringify(u));
         if (u && u.no_hp) {
           const totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
