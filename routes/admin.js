@@ -546,10 +546,6 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
       );
     }
 
-    // Delay 4 detik sebelum kirim pesan kedua ke nomor yang sama
-    // (mencegah Fonnte menolak karena anti-spam)
-    await new Promise(resolve => setTimeout(resolve, 4000));
-
     // Kirim WA Konfirmasi
     if (kirim_notif !== false && u.no_hp) {
       const rincianKonfirmasi = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n') +
@@ -1107,6 +1103,48 @@ router.get('/riwayat-wa', verifyAdmin, async (req, res) => {
       .limit(100);
     if (error) return res.status(500).json({ message: error.message });
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
+// KIRIM ULANG WA YANG GAGAL
+// ============================================================
+router.post('/resend-wa/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: riwayat, error } = await supabase.from('riwayat_wa').select('*').eq('id', id).single();
+    if (error || !riwayat) return res.status(404).json({ message: 'Data riwayat tidak ditemukan' });
+
+    // Kirim ulang ke Fonnte
+    const nomorFormatted = riwayat.no_hp;
+    let status = 'terkirim';
+    try {
+      const response = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: { 'Authorization': process.env.FONNTE_TOKEN },
+        body: new URLSearchParams({ target: nomorFormatted, message: riwayat.pesan })
+      });
+      const hasil = await response.json();
+      console.log('Resend WA ke', nomorFormatted, ':', JSON.stringify(hasil));
+      if (!hasil.status) {
+        status = 'gagal';
+        console.log('Resend WA gagal:', hasil.reason || hasil.message || '-');
+      }
+    } catch (e) {
+      status = 'gagal';
+      console.log('Resend WA error:', e.message);
+    }
+
+    // Update status di riwayat_wa
+    await supabase.from('riwayat_wa').update({ status }).eq('id', id);
+
+    if (status === 'terkirim') {
+      res.json({ message: 'Pesan berhasil dikirim ulang' });
+    } else {
+      res.status(500).json({ message: 'Gagal kirim ulang pesan' });
+    }
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
