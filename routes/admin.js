@@ -785,28 +785,173 @@ router.post('/semester/reset', verifyAdmin, async (req, res) => {
 });
 
 // ============================================================
-// TAMBAH SEMESTER BARU + NOTIFIKASI WA
+// PREVIEW DUPLIKAT SEMESTER (sebelum simpan)
+// ============================================================
+router.get('/semester/preview-duplikat', verifyAdmin, async (req, res) => {
+  try {
+    const { semester_asal } = req.query;
+    if (!semester_asal) return res.status(400).json({ message: 'semester_asal wajib diisi' });
+
+    const { data: tagihanAsal, error } = await supabase
+      .from('tagihan')
+      .select('user_id, jenis, jumlah')
+      .eq('semester', semester_asal);
+    if (error) return res.status(500).json({ message: error.message });
+    if (!tagihanAsal || tagihanAsal.length === 0)
+      return res.status(404).json({ message: `Tidak ada tagihan di semester "${semester_asal}"` });
+
+    const { data: users } = await supabase.from('users').select('id, nama_siswa, kelas').order('nama_siswa');
+
+    const templateMap = {};
+    for (const t of tagihanAsal) {
+      if (!templateMap[t.user_id]) templateMap[t.user_id] = [];
+      templateMap[t.user_id].push({ jenis: t.jenis, jumlah: Number(t.jumlah) });
+    }
+
+    const jenisCount = {};
+    for (const t of tagihanAsal) {
+      const key = `${t.jenis}||${t.jumlah}`;
+      jenisCount[key] = (jenisCount[key] || 0) + 1;
+    }
+    const templateGlobal = Object.entries(jenisCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key]) => {
+        const [jenis, jumlah] = key.split('||');
+        return { jenis, jumlah: Number(jumlah) };
+      });
+
+    const preview = (users || []).map(u => {
+      const tagihanUser = templateMap[u.id] || templateGlobal;
+      return {
+        user_id: u.id,
+        nama_siswa: u.nama_siswa,
+        kelas: u.kelas,
+        tagihan: tagihanUser,
+        total: tagihanUser.reduce((a, t) => a + t.jumlah, 0)
+      };
+    });
+
+    res.json({ semester_asal, total_santri: preview.length, template_global: templateGlobal, preview });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
+// GET DAFTAR SEMESTER YANG ADA
+// ============================================================
+router.get('/semester/daftar', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tagihan')
+      .select('semester')
+      .not('semester', 'is', null)
+      .neq('semester', '');
+    if (error) return res.status(500).json({ message: error.message });
+    const unik = [...new Set(data.map(r => r.semester))].sort();
+    res.json(unik);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
+// TAMBAH SEMESTER BARU + AUTO-DUPLIKAT + NOTIFIKASI WA
 // ============================================================
 router.post('/semester', verifyAdmin, async (req, res) => {
   try {
-    const { nama_semester, tagihan_baru } = req.body;
-    if (!tagihan_baru || tagihan_baru.length === 0) return res.status(400).json({ message: 'Data tagihan baru kosong' });
+    const { nama_semester, tagihan_baru, semester_asal, duplikat_otomatis } = req.body;
+    if (!nama_semester || !nama_semester.trim())
+      return res.status(400).json({ message: 'nama_semester wajib diisi' });
 
-    const insertData = tagihan_baru.map(t => ({
+    // Cegah duplikat nama semester
+    const { data: cekAda } = await supabase
+      .from('tagihan').select('id').eq('semester', nama_semester.trim()).limit(1);
+    if (cekAda && cekAda.length > 0)
+      return res.status(409).json({ message: `Semester "${nama_semester}" sudah ada` });
+
+    let finalTagihan = tagihan_baru ? [...tagihan_baru] : [];
+
+    // === AUTO-DUPLIKAT jika tagihan_baru tidak dikirim ===
+    if (finalTagihan.length === 0 && duplikat_otomatis !== false) {
+      let semesterReferensi = semester_asal;
+
+      // Jika semester_asal tidak disebutkan, ambil semester terakhir
+      if (!semesterReferensi) {
+        const { data: semuaSemester } = await supabase
+          .from('tagihan').select('semester').not('semester', 'is', null).neq('semester', '');
+        if (semuaSemester && semuaSemester.length > 0) {
+          const daftarUnik = [...new Set(semuaSemester.map(r => r.semester))].sort();
+          semesterReferensi = daftarUnik[daftarUnik.length - 1];
+        }
+      }
+
+      if (semesterReferensi) {
+        const { data: tagihanReferensi } = await supabase
+          .from('tagihan').select('user_id, jenis, jumlah').eq('semester', semesterReferensi);
+
+        if (tagihanReferensi && tagihanReferensi.length > 0) {
+          // Map per user dari semester referensi
+          const perUser = {};
+          for (const t of tagihanReferensi) {
+            if (!perUser[t.user_id]) perUser[t.user_id] = [];
+            perUser[t.user_id].push({ jenis: t.jenis, jumlah: Number(t.jumlah) });
+          }
+
+          // Template global (jenis+jumlah paling umum) sebagai fallback santri baru
+          const jenisCount = {};
+          for (const t of tagihanReferensi) {
+            const key = `${t.jenis}||${t.jumlah}`;
+            jenisCount[key] = (jenisCount[key] || 0) + 1;
+          }
+          const templateGlobal = Object.entries(jenisCount)
+            .sort((a, b) => b[1] - a[1])
+            .map(([key]) => {
+              const [jenis, jumlah] = key.split('||');
+              return { jenis, jumlah: Number(jumlah) };
+            });
+
+          // Ambil semua santri aktif
+          const { data: semuaUser } = await supabase.from('users').select('id');
+          for (const u of (semuaUser || [])) {
+            const tagihanUser = perUser[u.id] || templateGlobal;
+            for (const t of tagihanUser) {
+              finalTagihan.push({ user_id: u.id, jenis: t.jenis, jumlah: t.jumlah });
+            }
+          }
+        }
+      }
+    }
+
+    if (finalTagihan.length === 0)
+      return res.status(400).json({ message: 'Tidak ada data tagihan. Isi manual atau pastikan ada semester sebelumnya untuk diduplikat.' });
+
+    const insertData = finalTagihan.map(t => ({
       user_id: t.user_id, jenis: t.jenis, jumlah: Math.round(Number(t.jumlah)),
-      tanggal_bayar: null, status: 'belum', semester: nama_semester
+      tanggal_bayar: null, status: 'belum', semester: nama_semester.trim()
     }));
-    await supabase.from('tagihan').insert(insertData);
-    res.json({ message: `${tagihan_baru.length} tagihan semester baru berhasil ditambahkan!` });
+    const { error: insertError } = await supabase.from('tagihan').insert(insertData);
+    if (insertError) return res.status(500).json({ message: insertError.message });
 
-    const userIds = [...new Set(tagihan_baru.map(t => t.user_id))];
+    res.json({
+      message: `${finalTagihan.length} tagihan semester "${nama_semester}" berhasil ditambahkan!`,
+      jumlah: finalTagihan.length,
+      semester: nama_semester.trim(),
+      duplikat_dari: semester_asal || '(otomatis dari semester terakhir)'
+    });
+
+    // === NOTIFIKASI WA (background) ===
+    const userIds = [...new Set(finalTagihan.map(t => t.user_id))];
     for (const uid of userIds) {
       try {
-        const tagihanUser = tagihan_baru.filter(t => t.user_id === uid);
+        const tagihanUser = finalTagihan.filter(t => t.user_id === uid);
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', uid).single();
         if (!u || !u.no_hp) continue;
 
-        const { data: tunggakan } = await supabase.from('tagihan').select('jenis, jumlah, semester, pembayaran(jumlah_bayar)').eq('user_id', uid).eq('status', 'belum').neq('semester', nama_semester);
+        const { data: tunggakan } = await supabase
+          .from('tagihan')
+          .select('jenis, jumlah, semester, pembayaran(jumlah_bayar)')
+          .eq('user_id', uid).eq('status', 'belum').neq('semester', nama_semester.trim());
 
         const daftarBaru = tagihanUser.map(t => `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`).join('\n');
         const totalBaru = tagihanUser.reduce((a, b) => a + Math.round(Number(b.jumlah)), 0);
