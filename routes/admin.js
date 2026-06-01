@@ -546,6 +546,10 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
       );
     }
 
+    // Delay 4 detik sebelum kirim pesan kedua ke nomor yang sama
+    // (mencegah Fonnte menolak karena anti-spam)
+    await new Promise(resolve => setTimeout(resolve, 4000));
+
     // Kirim WA Konfirmasi
     if (kirim_notif !== false && u.no_hp) {
       const rincianKonfirmasi = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n') +
