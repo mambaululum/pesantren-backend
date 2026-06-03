@@ -1322,7 +1322,7 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
     const { data, error } = await supabase.rpc('get_riwayat_pembayaran');
     if (error) {
       // fallback manual join
-      const { data: pembayaran } = await supabase.from('pembayaran').select('*').order('tanggal_bayar', { ascending: false }).limit(200);
+      const { data: pembayaran } = await supabase.from('pembayaran').select('*').eq('arsip', false).order('tanggal_bayar', { ascending: false }).limit(200);
       const result = await Promise.all((pembayaran || []).map(async (p) => {
         const { data: t } = await supabase.from('tagihan').select('jenis, jumlah, user_id').eq('id', p.tagihan_id).single();
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, kelas').eq('id', t?.user_id).single();
@@ -1530,16 +1530,16 @@ router.delete('/pembayaran-umum/:id', verifyAdmin, async (req, res) => {
 // ============================================================
 router.delete('/pembayaran/:id', verifyAdmin, async (req, res) => {
   try {
-    const { error } = await supabase.from('pembayaran').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('pembayaran').update({ arsip: true }).eq('id', req.params.id);
     if (error) return res.status(500).json({ message: error.message });
-    res.json({ message: 'Berhasil dihapus' });
+    res.json({ message: 'Berhasil dihapus dari riwayat' });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 router.delete('/pembayaran/hapus-semua', verifyAdmin, async (req, res) => {
   try {
-    await supabase.from('pembayaran').delete().neq('id', 0);
-    res.json({ message: 'Semua riwayat pembayaran berhasil dihapus' });
+    await supabase.from('pembayaran').update({ arsip: true }).neq('id', 0);
+    res.json({ message: 'Semua riwayat pembayaran berhasil disembunyikan' });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
