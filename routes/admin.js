@@ -1484,12 +1484,35 @@ router.get('/pembayaran-umum', verifyAdmin, async (req, res) => {
 
 router.post('/pembayaran-umum', verifyAdmin, async (req, res) => {
   try {
-    const { nama_pembayar, keperluan, jumlah, tanggal, keterangan, kategori } = req.body;
+    const { nama_pembayar, keperluan, jumlah, tanggal, keterangan, kategori, no_hp, kirim_notif } = req.body;
     if (!nama_pembayar || !keperluan || !jumlah) return res.status(400).json({ message: 'Nama, keperluan, jumlah wajib diisi' });
     const { data, error } = await supabase.from('pembayaran_umum').insert([{
-      nama_pembayar, keperluan, jumlah: Number(jumlah), tanggal, keterangan, kategori: kategori || 'umum'
+      nama_pembayar, keperluan, jumlah: Number(jumlah), tanggal, keterangan, kategori: kategori || 'umum', no_hp: no_hp || ''
     }]).select().single();
     if (error) return res.status(500).json({ message: error.message });
+
+    if (kirim_notif && no_hp) {
+      try {
+        await kirimWA(no_hp,
+          `Assalamu'alaikum,\n\n` +
+          `✅ *Konfirmasi Pembayaran*\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `👤 Nama       : *${nama_pembayar}*\n` +
+          `📋 Keperluan  : *${keperluan}*\n` +
+          `💰 Jumlah     : *Rp ${formatRp(jumlah)}*\n` +
+          `📅 Tanggal    : ${tanggal}\n` +
+          (keterangan ? `📝 Keterangan : ${keterangan}\n` : '') +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `Terima kasih 🙏\n` +
+          `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+          `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
+          `_PP. Muhammadiyah Mambaul Ulum_\n` +
+          `_Mojo - Andong - Boyolali_`,
+          { jenis: 'pembayaran_umum', nama_wali: nama_pembayar, nama_siswa: nama_pembayar }
+        );
+      } catch (e) { console.log('WA pembayaran umum error:', e.message); }
+    }
+
     res.json(data);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
