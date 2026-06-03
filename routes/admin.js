@@ -1107,12 +1107,15 @@ const kirimPengingatSemua = async () => {
         `━━━━━━━━━━━━━━━━━━\n` +
         `💰 Total Kekurangan: *Rp ${sisa.toLocaleString('id-ID')}*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
-        `Mohon segera lakukan pembayaran ke bagian administrasi atau transfer:\n\n` +
+        `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
         `🏦 *Bank BRI*\n` +
         `📋 No. Rek : *6665 0101 4641 533*\n` +
         `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
         `📱 Konfirmasi Pembayaran:\n` +
         `☎️ Hubungi : *081393695901*\n\n` +
+        `Terima kasih 🙏\n` +
+        `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+        `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
         { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
@@ -1168,7 +1171,15 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `━━━━━━━━━━━━━━━━━━\n` +
       `💰 Total Kekurangan: *Rp ${sisa.toLocaleString('id-ID')}*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `Mohon segera lakukan pembayaran 🙏\n\n` +
+      `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
+      `🏦 *Bank BRI*\n` +
+      `📋 No. Rek : *6665 0101 4641 533*\n` +
+      `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+      `📱 Konfirmasi Pembayaran:\n` +
+      `☎️ Hubungi : *081393695901*\n\n` +
+      `Terima kasih 🙏\n` +
+      `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+      `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
       `_PP. Muhammadiyah Mambaul Ulum_\n` +
       `_Mojo - Andong - Boyolali_`,
       { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
