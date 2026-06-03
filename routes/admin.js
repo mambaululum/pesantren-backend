@@ -1456,5 +1456,58 @@ console.log('Fonnte PDF response:', JSON.stringify(hasilPDF));
   }
 });
 
+// ============================================================
+// PEMBAYARAN UMUM (Non-Tagihan)
+// ============================================================
+router.get('/pembayaran-umum', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('pembayaran_umum')
+      .select('*')
+      .order('tanggal', { ascending: false })
+      .limit(200);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/pembayaran-umum', verifyAdmin, async (req, res) => {
+  try {
+    const { nama_pembayar, keperluan, jumlah, tanggal, keterangan, kategori } = req.body;
+    if (!nama_pembayar || !keperluan || !jumlah) return res.status(400).json({ message: 'Nama, keperluan, jumlah wajib diisi' });
+    const { data, error } = await supabase.from('pembayaran_umum').insert([{
+      nama_pembayar, keperluan, jumlah: Number(jumlah), tanggal, keterangan, kategori: kategori || 'umum'
+    }]).select().single();
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.delete('/pembayaran-umum/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('pembayaran_umum').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: 'Berhasil dihapus' });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ============================================================
+// HAPUS RIWAYAT PEMBAYARAN (tagihan)
+// ============================================================
+router.delete('/pembayaran/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('pembayaran').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: 'Berhasil dihapus' });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.delete('/pembayaran/hapus-semua', verifyAdmin, async (req, res) => {
+  try {
+    await supabase.from('pembayaran').delete().neq('id', 0);
+    res.json({ message: 'Semua riwayat pembayaran berhasil dihapus' });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
