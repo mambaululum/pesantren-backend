@@ -392,7 +392,7 @@ const getTotalKekurangan = async (uid) => {
 // ============================================================
 router.post('/pembayaran', verifyAdmin, async (req, res) => {
   try {
-    const { tagihan_id, jumlah_bayar, tanggal_bayar, keterangan } = req.body;
+    const { tagihan_id, jumlah_bayar, tanggal_bayar, keterangan, kirim_notif } = req.body;
 
     await supabase.from('pembayaran').insert([{ tagihan_id, jumlah_bayar, tanggal_bayar, keterangan: keterangan || '' }]);
 
@@ -405,7 +405,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
       await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', tagihan_id);
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
-        if (u && u.no_hp) {
+        if (u && u.no_hp && kirim_notif !== false) {
           let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
             `🧾 *KWITANSI PEMBAYARAN*\n` +
@@ -436,7 +436,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         console.log('Cicilan: mencoba kirim WA, user_id:', t.user_id);
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         console.log('Cicilan: user data:', JSON.stringify(u));
-        if (u && u.no_hp) {
+        if (u && u.no_hp && kirim_notif !== false) {
           let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
