@@ -623,28 +623,7 @@ router.put('/pembayaran/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-// ============================================================
-// HAPUS CICILAN
-// ============================================================
-router.delete('/pembayaran/:id', verifyAdmin, async (req, res) => {
-  try {
-    const { data: p } = await supabase.from('pembayaran').select('tagihan_id').eq('id', req.params.id).single();
-    if (!p) return res.status(404).json({ message: 'Tidak ditemukan' });
 
-    await supabase.from('pembayaran').delete().eq('id', req.params.id);
-
-    const { data: t } = await supabase.from('tagihan').select('jumlah').eq('id', p.tagihan_id).single();
-    const { data: bayarList } = await supabase.from('pembayaran').select('jumlah_bayar, tanggal_bayar').eq('tagihan_id', p.tagihan_id);
-    const total_bayar = bayarList ? bayarList.reduce((a, b) => a + Number(b.jumlah_bayar), 0) : 0;
-    const status = total_bayar >= Number(t.jumlah) ? 'lunas' : 'belum';
-    const last_tgl = bayarList && bayarList.length ? bayarList[bayarList.length - 1].tanggal_bayar : null;
-    await supabase.from('tagihan').update({ status, tanggal_bayar: status === 'lunas' ? last_tgl : null }).eq('id', p.tagihan_id);
-
-    res.json({ message: 'Cicilan berhasil dihapus' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
 // ============================================================
 // ARSIP SNAPSHOT SEMESTER
