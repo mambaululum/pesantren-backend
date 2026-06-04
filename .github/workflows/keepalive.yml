@@ -1,0 +1,22 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # tiap Senin jam 01:00 UTC (08:00 WIB)
+  workflow_dispatch:       # bisa dijalankan manual dari GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keep-alive endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            https://pesantren-backend.vercel.app/api/admin/keep-alive)
+          echo "HTTP Status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Ping gagal! Status: $STATUS"
+            exit 1
+          fi
+          echo "Supabase berhasil di-ping!"

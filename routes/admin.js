@@ -1522,5 +1522,22 @@ router.delete('/pembayaran/hapus-semua', verifyAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// ============================================================
+// KEEP ALIVE — mencegah Supabase auto pause
+// ============================================================
+router.get('/keep-alive', async (req, res) => {
+  const secret = req.headers['x-cron-secret'];
+  if (secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  try {
+    const { error } = await supabase.from('admins').select('id').limit(1);
+    if (error) throw error;
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
