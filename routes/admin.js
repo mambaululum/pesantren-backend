@@ -19,13 +19,21 @@ const formatNomor = (nomor) => {
   return n;
 };
 
+// ============================================================
+// MODE TES WA — kalau aktif, semua WA diarahkan ke nomor tes
+// ============================================================
+let modeTesAktif = false;
+let nomorTes = '';
+
 const kirimWA = async (nomor, pesan, meta = {}) => {
   if (!nomor || nomor.trim() === '') return;
   if (!process.env.FONNTE_TOKEN) {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
-  const nomorFormatted = formatNomor(nomor);
+  // Kalau mode tes aktif, alihkan ke nomor tes
+  const nomorTujuan = (modeTesAktif && nomorTes) ? nomorTes : nomor;
+  const nomorFormatted = formatNomor(nomorTujuan);
   let status = 'terkirim';
   try {
     const response = await fetch('https://api.fonnte.com/send', {
@@ -92,6 +100,21 @@ router.get('/test-wa', async (req, res) => {
 });
 
 // ============================================================
+// MODE TES WA
+// ============================================================
+router.get('/mode-tes', verifyAdmin, (req, res) => {
+  res.json({ aktif: modeTesAktif, nomor_tes: nomorTes });
+});
+
+router.post('/mode-tes', verifyAdmin, (req, res) => {
+  const { aktif, nomor_tes } = req.body;
+  modeTesAktif = !!aktif;
+  if (nomor_tes !== undefined) nomorTes = nomor_tes;
+  console.log(`Mode tes WA: ${modeTesAktif ? 'AKTIF ke ' + nomorTes : 'NONAKTIF'}`);
+  res.json({ aktif: modeTesAktif, nomor_tes: nomorTes });
+});
+
+// ============================================================
 // LOGIN ADMIN
 // ============================================================
 router.post('/login', async (req, res) => {
@@ -114,7 +137,7 @@ router.post('/login', async (req, res) => {
 // ============================================================
 router.get('/santri', verifyAdmin, async (req, res) => {
   try {
-    const { data: users, error } = await supabase.from('users').select('*').order('nama_siswa');
+    const { data: users, error } = await supabase.from('users').select('*').order('kelas').order('nama_siswa');
     if (error) return res.status(500).json({ message: error.message });
 
     const result = await Promise.all(users.map(async (u) => {
@@ -1520,23 +1543,6 @@ router.delete('/pembayaran/hapus-semua', verifyAdmin, async (req, res) => {
     await supabase.from('pembayaran').update({ arsip: true }).neq('id', 0);
     res.json({ message: 'Semua riwayat pembayaran berhasil disembunyikan' });
   } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// ============================================================
-// KEEP ALIVE — mencegah Supabase auto pause
-// ============================================================
-router.get('/keep-alive', async (req, res) => {
-  const secret = req.headers['x-cron-secret'];
-  if (secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  try {
-    const { error } = await supabase.from('admins').select('id').limit(1);
-    if (error) throw error;
-    res.json({ status: 'ok', time: new Date().toISOString() });
-  } catch (e) {
-    res.status(500).json({ status: 'error', message: e.message });
-  }
 });
 
 module.exports = router;
