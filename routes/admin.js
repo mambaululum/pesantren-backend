@@ -435,7 +435,6 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         if (u && u.no_hp && kirim_notif !== false) {
-          let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
             `🧾 *KWITANSI PEMBAYARAN*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
@@ -462,9 +461,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 
     } else {
       try {
-        console.log('Cicilan: mencoba kirim WA, user_id:', t.user_id);
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
-        console.log('Cicilan: user data:', JSON.stringify(u));
         if (u && u.no_hp && kirim_notif !== false) {
           let totalKekurangan = await getTotalKekurangan(t.user_id);
           await kirimWA(u.no_hp,
@@ -1314,14 +1311,6 @@ router.post('/resend-wa/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-router.delete('/riwayat-wa', verifyAdmin, async (req, res) => {
-  try {
-    await supabase.from('riwayat_wa').delete().neq('id', 0);
-    res.json({ message: 'Riwayat WA berhasil dihapus' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 // ============================================================
 // GET RIWAYAT PEMBAYARAN
 // ============================================================
@@ -1345,6 +1334,11 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
 });
 // ============================================================
 // CRON JOB PENGINGAT OTOMATIS
+// PERINGATAN: endpoint ini TANPA verifyAdmin (sengaja, agar bisa
+// dipanggil Vercel Cron tanpa header Authorization). Karena itu
+// siapa pun yang tahu URL ini bisa memicu broadcast WA ke semua
+// wali santri. Jika tidak dipakai cron eksternal, sebaiknya
+// tambahkan verifyAdmin atau secret key di query param.
 // ============================================================
 router.get('/cron/pengingat', async (req, res) => {
   // auth disabled for test
@@ -1406,8 +1400,6 @@ if (file_base64 && file_name) {
     console.log('PDF public URL:', publicUrl);
   }
 }
-  if (!pesan) return res.status(400).json({ message: 'Pesan wajib diisi' });
-  if (!target_ids || target_ids.length === 0) return res.status(400).json({ message: 'Tidak ada penerima' });
 
   try {
     // Ambil data wali sesuai target
