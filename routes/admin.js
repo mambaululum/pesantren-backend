@@ -67,6 +67,12 @@ const kirimWA = async (nomor, pesan, meta = {}) => {
   }
 };
 
+// Helper: terapkan mode tes dan format nomor (digunakan di semua pengiriman langsung)
+const getNomorTujuan = (nomor) => {
+  const tujuan = (modeTesAktif && nomorTes) ? nomorTes : nomor;
+  return formatNomor(tujuan);
+};
+
 // ============================================================
 // MIDDLEWARE CEK TOKEN ADMIN
 // ============================================================
@@ -1275,8 +1281,8 @@ router.post('/resend-wa/:id', verifyAdmin, async (req, res) => {
     const { data: riwayat, error } = await supabase.from('riwayat_wa').select('*').eq('id', id).single();
     if (error || !riwayat) return res.status(404).json({ message: 'Data riwayat tidak ditemukan' });
 
-    // Kirim ulang ke Fonnte
-    const nomorFormatted = riwayat.no_hp;
+    // Kirim ulang ke Fonnte — terapkan mode tes jika aktif
+    const nomorFormatted = getNomorTujuan(riwayat.no_hp);
     let status = 'terkirim';
     try {
       const response = await fetch('https://api.fonnte.com/send', {
@@ -1421,18 +1427,18 @@ if (file_base64 && file_name) {
     for (const u of (users || [])) {
       try {
         if (publicUrl && file_name) {
-  // Kirim dengan dokumen PDF
-  // Download PDF dari Supabase dulu, lalu kirim ke Fonnte sebagai base64
-const formData = new FormData();
-formData.append('target', u.no_hp);
-formData.append('message', pesanLengkap + (publicUrl ? `\n\n📎 Lampiran PDF:\n${publicUrl}` : ''));
+          // Kirim dengan dokumen PDF — terapkan mode tes seperti kirimWA()
+          const nomorFormatted = getNomorTujuan(u.no_hp);
+          const formData = new FormData();
+          formData.append('target', nomorFormatted);
+          formData.append('message', pesanLengkap + (publicUrl ? `\n\n📎 Lampiran PDF:\n${publicUrl}` : ''));
           const responsePDF = await fetch('https://api.fonnte.com/send', {
-  method: 'POST',
-  headers: { 'Authorization': process.env.FONNTE_TOKEN },
-  body: formData
-});
-const hasilPDF = await responsePDF.json();
-console.log('Fonnte PDF response:', JSON.stringify(hasilPDF));
+            method: 'POST',
+            headers: { 'Authorization': process.env.FONNTE_TOKEN },
+            body: formData
+          });
+          const hasilPDF = await responsePDF.json();
+          console.log('Fonnte PDF response ke', nomorFormatted, ':', JSON.stringify(hasilPDF));
         } else {
           await kirimWA(u.no_hp, pesanLengkap, { jenis: 'pengumuman', nama_wali: u.nama, nama_siswa: u.nama_siswa });
         }
