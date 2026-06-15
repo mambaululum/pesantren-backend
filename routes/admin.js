@@ -485,10 +485,10 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 // Simpan notifikasi in-app
     await simpanNotifikasi(
       t.user_id,
-      '✅ Pembayaran Diterima',
-      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Status: LUNAS 🎉`,
+      '✅ Pembayaran Berhasil',
+      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Status: Lunas 🎉`,
       'bayar',
-      { jenis: t.jenis, jumlah_bayar, sisa: 0, tanggal_bayar }
+      { jenis: t.jenis, jumlah: t.jumlah, jumlah_bayar, sisa: 0, tanggal_bayar }
     );
       res.json({ message: 'Pembayaran berhasil, tagihan LUNAS!', lunas: true });
 
@@ -525,10 +525,10 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 // Simpan notifikasi in-app
     await simpanNotifikasi(
       t.user_id,
-      '✅ Pembayaran Diterima',
+      '✅ Pembayaran Berhasil',
       `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Sisa: Rp ${formatRp(sisa)}`,
       'bayar',
-      { jenis: t.jenis, jumlah_bayar, sisa, tanggal_bayar }
+      { jenis: t.jenis, jumlah: t.jumlah, jumlah_bayar, sisa, tanggal_bayar }
     );
       res.json({ message: `Pembayaran dicatat. Sisa: Rp ${sisa.toLocaleString('id-ID')}`, lunas: false, sisa });
     }
@@ -571,11 +571,11 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
         sisaUang -= t.sisa;
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
-        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa });
+        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah });
       } else {
         // Cicilan
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
-        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang };
+        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang };
         sisaUang = 0;
       }
     }
@@ -588,7 +588,7 @@ if (lunasList.length > 0 && cicilanItem) {
   // Ada yang lunas + ada cicilan
   await simpanNotifikasi(
     user_id,
-    '✅ Pembayaran Diterima',
+    '✅ Pembayaran Berhasil',
     `Pembayaran Rp ${formatRp(jumlah_total)} diterima. Lunas: ${rincianNotif}. Cicilan ${cicilanItem.jenis}: Rp ${formatRp(cicilanItem.dibayar)}, sisa Rp ${formatRp(cicilanItem.sisa)}.`,
     'bayar',
     { lunasList, cicilanItem, jumlah_total, tanggal_bayar }
@@ -597,8 +597,8 @@ if (lunasList.length > 0 && cicilanItem) {
   // Semua lunas
   await simpanNotifikasi(
     user_id,
-    '✅ Pembayaran Diterima',
-    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. ${rincianNotif} — semua LUNAS 🎉`,
+    '✅ Pembayaran Berhasil',
+    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. ${rincianNotif} — semua Lunas 🎉`,
     'bayar',
     { lunasList, jumlah_total, tanggal_bayar }
   );
@@ -606,7 +606,7 @@ if (lunasList.length > 0 && cicilanItem) {
   // Hanya cicilan
   await simpanNotifikasi(
     user_id,
-    '✅ Pembayaran Diterima',
+    '✅ Pembayaran Berhasil',
     `Cicilan ${cicilanItem.jenis} sebesar Rp ${formatRp(cicilanItem.dibayar)} diterima. Sisa: Rp ${formatRp(cicilanItem.sisa)}.`,
     'bayar',
     { cicilanItem, jumlah_total, tanggal_bayar }
