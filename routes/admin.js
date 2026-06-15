@@ -24,14 +24,7 @@ const formatNomor = (nomor) => {
 // ============================================================
 let modeTesAktif = false;
 let nomorTes = '';
-
-const kirimWA = async (nomor, pesan, meta = {}) => {
-  if (!nomor || nomor.trim() === '') return;
-  if (!process.env.FONNTE_TOKEN) {
-    console.log('WA: FONNTE_TOKEN belum diisi di .env');
-    return;
-  }
-  const simpanNotifikasi = async (user_id, judul, pesan, jenis = 'info', data_json = {}) => {
+ const simpanNotifikasi = async (user_id, judul, pesan, jenis = 'info', data_json = {}) => {
   try {
     await supabase.from('notifikasi').insert([{
       user_id, judul, pesan, jenis,
@@ -42,6 +35,13 @@ const kirimWA = async (nomor, pesan, meta = {}) => {
     console.log('Simpan notifikasi error:', e.message);
   }
 };
+const kirimWA = async (nomor, pesan, meta = {}) => {
+  if (!nomor || nomor.trim() === '') return;
+  if (!process.env.FONNTE_TOKEN) {
+    console.log('WA: FONNTE_TOKEN belum diisi di .env');
+    return;
+  }
+ 
   // Kalau mode tes aktif, alihkan ke nomor tes
   const nomorTujuan = (modeTesAktif && nomorTes) ? nomorTes : nomor;
   const nomorFormatted = formatNomor(nomorTujuan);
@@ -305,7 +305,7 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
       tanggal_bayar: tanggal_bayar || null, status: status || 'belum', semester: semester || null
     }]).select('id').single();
     if (error) return res.status(500).json({ message: error.message });
-    res.json({ message: 'Tagihan berhasil ditambahkan', id: data.id });
+    
 // Simpan notifikasi in-app
     await simpanNotifikasi(
       user_id,
@@ -314,6 +314,7 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
       'tagihan',
       { jenis, jumlah, tanggal_bayar }
     );
+    res.json({ message: 'Tagihan berhasil ditambahkan', id: data.id });
     if ((status || 'belum') === 'belum' && kirim_notif !== false) {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
@@ -581,7 +582,36 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
 
     const kelebihan = sisaUang; // sisa uang setelah semua tagihan terbayar
     const totalKekurangan = await getTotalKekurangan(user_id);
-
+// Simpan notifikasi in-app
+const rincianNotif = lunasList.map(t => `${t.jenis}: Rp ${formatRp(t.dibayar)}`).join(', ');
+if (lunasList.length > 0 && cicilanItem) {
+  // Ada yang lunas + ada cicilan
+  await simpanNotifikasi(
+    user_id,
+    '✅ Pembayaran Diterima',
+    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. Lunas: ${rincianNotif}. Cicilan ${cicilanItem.jenis}: Rp ${formatRp(cicilanItem.dibayar)}, sisa Rp ${formatRp(cicilanItem.sisa)}.`,
+    'bayar',
+    { lunasList, cicilanItem, jumlah_total, tanggal_bayar }
+  );
+} else if (lunasList.length > 0) {
+  // Semua lunas
+  await simpanNotifikasi(
+    user_id,
+    '✅ Pembayaran Diterima',
+    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. ${rincianNotif} — semua LUNAS 🎉`,
+    'bayar',
+    { lunasList, jumlah_total, tanggal_bayar }
+  );
+} else if (cicilanItem) {
+  // Hanya cicilan
+  await simpanNotifikasi(
+    user_id,
+    '✅ Pembayaran Diterima',
+    `Cicilan ${cicilanItem.jenis} sebesar Rp ${formatRp(cicilanItem.dibayar)} diterima. Sisa: Rp ${formatRp(cicilanItem.sisa)}.`,
+    'bayar',
+    { cicilanItem, jumlah_total, tanggal_bayar }
+  );
+}
     // Kirim response dulu sebelum kirim WA
     res.json({ message: 'Pembayaran bulk berhasil', lunas: lunasList.length, cicilan: cicilanItem, kelebihan });
 
