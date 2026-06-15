@@ -31,6 +31,17 @@ const kirimWA = async (nomor, pesan, meta = {}) => {
     console.log('WA: FONNTE_TOKEN belum diisi di .env');
     return;
   }
+  const simpanNotifikasi = async (user_id, judul, pesan, jenis = 'info', data_json = {}) => {
+  try {
+    await supabase.from('notifikasi').insert([{
+      user_id, judul, pesan, jenis,
+      sudah_dibaca: false,
+      data_json
+    }]);
+  } catch (e) {
+    console.log('Simpan notifikasi error:', e.message);
+  }
+};
   // Kalau mode tes aktif, alihkan ke nomor tes
   const nomorTujuan = (modeTesAktif && nomorTes) ? nomorTes : nomor;
   const nomorFormatted = formatNomor(nomorTujuan);
@@ -295,7 +306,14 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
     }]).select('id').single();
     if (error) return res.status(500).json({ message: error.message });
     res.json({ message: 'Tagihan berhasil ditambahkan', id: data.id });
-
+// Simpan notifikasi in-app
+    await simpanNotifikasi(
+      user_id,
+      '📋 Tagihan Baru',
+      `Tagihan ${jenis} sebesar Rp ${formatRp(jumlah)} telah ditambahkan.`,
+      'tagihan',
+      { jenis, jumlah, tanggal_bayar }
+    );
     if ((status || 'belum') === 'belum' && kirim_notif !== false) {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
@@ -380,7 +398,14 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
       jenis, jumlah, tanggal_bayar: tanggal_bayar || null, status, semester: semester || null
     }).eq('id', req.params.id);
     if (error) return res.status(500).json({ message: error.message });
-
+// Simpan notifikasi in-app
+    await simpanNotifikasi(
+      user_id,
+      '✏️ Data Tagihan Dikoreksi',
+      `Data tagihan ${jenis} telah diperbarui oleh admin. Jumlah: Rp ${formatRp(jumlah)}.`,
+      'koreksi',
+      { jenis, jumlah, tanggal_bayar, status }
+    );
     res.json({ message: 'Tagihan berhasil diupdate' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -456,7 +481,14 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
-
+// Simpan notifikasi in-app
+    await simpanNotifikasi(
+      t.user_id,
+      '✅ Pembayaran Diterima',
+      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Status: LUNAS 🎉`,
+      'bayar',
+      { jenis: t.jenis, jumlah_bayar, sisa: 0, tanggal_bayar }
+    );
       res.json({ message: 'Pembayaran berhasil, tagihan LUNAS!', lunas: true });
 
     } else {
@@ -489,7 +521,14 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
           );
         }
       } catch (e) { console.log('WA error:', e.message); }
-
+// Simpan notifikasi in-app
+    await simpanNotifikasi(
+      t.user_id,
+      '✅ Pembayaran Diterima',
+      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Sisa: Rp ${formatRp(sisa)}`,
+      'bayar',
+      { jenis: t.jenis, jumlah_bayar, sisa, tanggal_bayar }
+    );
       res.json({ message: `Pembayaran dicatat. Sisa: Rp ${sisa.toLocaleString('id-ID')}`, lunas: false, sisa });
     }
   } catch (err) {
@@ -1559,6 +1598,45 @@ router.get('/keep-alive', async (req, res) => {
     res.status(500).json({ status: 'error', message: e.message });
   }
 });
+// ============================================================
+// NOTIFIKASI IN-APP
+// ============================================================
 
+// PATCH baca-semua HARUS di atas /:id/baca agar tidak tertimpa
+router.patch('/notifikasi/baca-semua', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    await supabase.from('notifikasi').update({ sudah_dibaca: true }).eq('user_id', decoded.id);
+    res.json({ message: 'ok' });
+  } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
+
+router.patch('/notifikasi/:id/baca', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    await supabase.from('notifikasi').update({ sudah_dibaca: true }).eq('id', req.params.id);
+    res.json({ message: 'ok' });
+  } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
+
+router.get('/notifikasi', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { data, error } = await supabase
+      .from('notifikasi')
+      .select('*')
+      .eq('user_id', decoded.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data || []);
+  } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
