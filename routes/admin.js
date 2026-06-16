@@ -624,7 +624,7 @@ if (lunasList.length > 0 && cicilanItem) {
   await simpanNotifikasi(
     user_id,
     '✅ Pembayaran Berhasil',
-    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. ${rincianNotif} — semua Lunas 🎉`,
+    `Pembayaran Rp ${formatRp(jumlah_total)} diterima. ${rincianNotif} — Lunas 🎉`,
     'bayar',
     { lunasList, jumlah_total, tanggal_bayar }
   );
