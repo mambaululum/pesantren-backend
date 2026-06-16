@@ -3,7 +3,31 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/db');
+const webpush = require('web-push');
 
+webpush.setVapidDetails(
+  process.env.VAPID_EMAIL,
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+// Helper kirim push ke HP
+const kirimPushNotif = async (user_id, judul, pesan) => {
+  try {
+    const { data } = await supabase
+      .from('push_subscriptions')
+      .select('subscription')
+      .eq('user_id', user_id)
+      .single();
+    if (!data) return;
+    await webpush.sendNotification(
+      data.subscription,
+      JSON.stringify({ title: judul, body: pesan })
+    );
+  } catch (e) {
+    console.log('Push notif error:', e.message);
+  }
+};
 // ============================================================
 // HELPER FORMAT RUPIAH
 // ============================================================
@@ -31,6 +55,8 @@ let nomorTes = '';
       sudah_dibaca: false,
       data_json
     }]);
+    // ✅ Kirim push ke HP
+    await kirimPushNotif(user_id, judul, pesan);
   } catch (e) {
     console.log('Simpan notifikasi error:', e.message);
   }
@@ -1667,6 +1693,22 @@ router.get('/notifikasi', async (req, res) => {
     if (error) return res.status(500).json({ message: error.message });
     res.json(data || []);
   } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
+// Simpan push subscription dari HP user
+router.post('/push-subscribe', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { subscription } = req.body;
+    await supabase.from('push_subscriptions').upsert([{
+      user_id: decoded.id,
+      subscription
+    }], { onConflict: 'user_id' });
+    res.json({ message: 'ok' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
