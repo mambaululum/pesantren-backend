@@ -1219,7 +1219,15 @@ const kirimPengingatSemua = async () => {
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
         { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
+        
       );
+      await simpanNotifikasi(
+  u.id,
+  '🔔 Pengingat Tagihan',
+  `Masih ada tunggakan sebesar Rp ${sisa.toLocaleString('id-ID')}. Segera lunasi ke administrasi pondok.`,
+  'info',
+  { sisa }
+);
     } catch (e) { console.log('WA pengingat error:', e.message); }
   }
   return terkirim;
@@ -1284,6 +1292,13 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `_Mojo - Andong - Boyolali_`,
       { jenis: 'pengingat', nama_wali: u.nama, nama_siswa: u.nama_siswa }
     );
+    await simpanNotifikasi(
+  u.id,
+  '🔔 Pengingat Tagihan',
+  `Masih ada tunggakan sebesar Rp ${sisa.toLocaleString('id-ID')}. Segera lunasi ke administrasi pondok.`,
+  'info',
+  { sisa }
+);
     res.json({ message: `Pengingat berhasil dikirim ke ${u.nama} (${u.no_hp})` });
   } catch (err) {
     res.status(500).json({ message: err.message });
