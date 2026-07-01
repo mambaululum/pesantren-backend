@@ -1442,23 +1442,7 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// ============================================================
-// CRON JOB PENGINGAT OTOMATIS
-// PERINGATAN: endpoint ini TANPA verifyAdmin (sengaja, agar bisa
-// dipanggil Vercel Cron tanpa header Authorization). Karena itu
-// siapa pun yang tahu URL ini bisa memicu broadcast WA ke semua
-// wali santri. Jika tidak dipakai cron eksternal, sebaiknya
-// tambahkan verifyAdmin atau secret key di query param.
-// ============================================================
-router.get('/cron/pengingat', async (req, res) => {
-  // auth disabled for test
-  try {
-    const terkirim = await kirimPengingatSemua();
-    res.json({ message: `Pengingat terkirim ke ${terkirim} wali`, terkirim });
-  } catch (e) {
-    res.status(500).json({ message: e.message });
-  }
-});
+
 // ============================================================
 // PENGUMUMAN & BROADCAST
 // ============================================================
