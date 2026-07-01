@@ -24,12 +24,13 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: {
-        id: data.id,
-        nama: data.nama,
-        nama_siswa: data.nama_siswa,
-        kelas: data.kelas
-      }
+     user: {
+          id: data.id,
+          nama: data.nama,
+          nama_siswa: data.nama_siswa,
+          kelas: data.kelas,
+          foto_url: data.foto_url || null
+        }
     });
   } catch (err) {
     console.error('Login error:', err.message);
