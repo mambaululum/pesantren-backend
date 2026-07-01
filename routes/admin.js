@@ -805,12 +805,9 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
       kelebihan
     });
 
-    // Kirim satu WA kwitansi gabungan (async, tidak blocking)
-    if (kirim_notif !== false && u.no_hp) {
-      const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅ (lunas)`).join('\n');
-      const rincianCicilan = cicilanItem ? `• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan, sisa Rp ${formatRp(cicilanItem.sisa)})\n` : '';
-      const rincianLain = itemLainSimpan ? `• ${itemLainSimpan.keperluan}: *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)\n` : '';
-
+    // Kirim WA Kwitansi (sama format seperti pembayaran-bulk) — hanya kalau ada yang lunas atau item non-tagihan
+    if (kirim_notif !== false && u.no_hp && (lunasList.length > 0 || itemLainSimpan)) {
+      const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n');
       await kirimWA(u.no_hp,
         `🧾 *KWITANSI PEMBAYARAN*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
@@ -818,12 +815,41 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
         `Berikut kwitansi pembayaran santri:\n\n` +
         `👤 Nama Santri    : *${u.nama_siswa}*\n` +
         `📅 Tanggal Bayar  : ${tanggal_bayar}\n` +
-        `💵 Total Setoran  : *Rp ${formatRp(jumlahTotal)}*\n` +
+        `💵 Total Dibayar  : *Rp ${formatRp(jumlahTotal)}*\n` +
         `💳 Metode         : *${metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai'}*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
-        `📋 *Rincian Pembayaran:*\n${rincianLunas}${rincianLunas ? '\n' : ''}${rincianCicilan}${rincianLain}` +
+        `📋 *Rincian Pembayaran:*\n${rincianLunas}\n` +
+        (cicilanItem ? `• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan)\n` : '') +
+        (itemLainSimpan ? `• ${itemLainSimpan.keperluan}: *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)\n` : '') +
         (kelebihan > 0 ? `\n🎉 Sisa Uang : *Rp ${formatRp(kelebihan)}*\n📝 Ket       : ${keterangan || '-'}\n` : '') +
         `━━━━━━━━━━━━━━━━━━\n` +
+        `Terima kasih atas pembayarannya 🙏\n` +
+        `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+        `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
+        `_PP. Muhammadiyah Mambaul Ulum_\n` +
+        `_Mojo - Andong - Boyolali_`,
+        { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
+      );
+    }
+
+    // Kirim WA Konfirmasi (sama format seperti pembayaran-bulk) — info kekurangan/sisa tagihan
+    if (kirim_notif !== false && u.no_hp) {
+      const rincianKonfirmasi = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n') +
+        (cicilanItem ? `\n• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan)` : '') +
+        (itemLainSimpan ? `\n• ${itemLainSimpan.keperluan}: *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)` : '');
+      await kirimWA(u.no_hp,
+        `✅ *Konfirmasi Pembayaran*\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
+        `Santri       : *${u.nama_siswa}*\n` +
+        `Total Bayar  : *Rp ${formatRp(jumlahTotal)}*\n` +
+        `Tanggal      : ${tanggal_bayar}\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `📋 *Rincian Pembayaran:*\n${rincianKonfirmasi}\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        (cicilanItem
+          ? `⚠️ *${cicilanItem.jenis}* masih sisa: *Rp ${formatRp(cicilanItem.sisa)}*\n━━━━━━━━━━━━━━━━━━\n`
+          : '') +
         (totalKekurangan > 0
           ? `⚠️ *Total kekurangan semua tagihan:*\n💰 *Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
@@ -838,7 +864,7 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
         `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
-        { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
+        { jenis: 'bayaran', nama_wali: u.nama, nama_siswa: u.nama_siswa }
       );
     }
   } catch (err) {
