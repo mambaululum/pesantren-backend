@@ -4,7 +4,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/db');
 const webpush = require('web-push');
-
+const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
+const supabaseAdmin = createSupabaseClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL,
   process.env.VAPID_PUBLIC_KEY,
@@ -1705,6 +1709,43 @@ router.post('/push-subscribe', async (req, res) => {
       subscription
     }], { onConflict: 'user_id' });
     res.json({ message: 'ok' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+// ============================================================
+// UPLOAD FOTO SANTRI
+// ============================================================
+router.post('/santri/:id/foto', verifyAdmin, async (req, res) => {
+  try {
+    const { foto_base64, mime_type } = req.body;
+    if (!foto_base64) return res.status(400).json({ message: 'Foto tidak ada' });
+
+    const ext = mime_type === 'image/png' ? 'png' : 'jpg';
+    const fileName = `santri-${req.params.id}.${ext}`;
+    const buffer = Buffer.from(foto_base64, 'base64');
+
+    // Upload ke Supabase Storage
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('foto-santri')
+      .upload(fileName, buffer, {
+        contentType: mime_type || 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadError) return res.status(500).json({ message: uploadError.message });
+
+    // Ambil public URL
+    const { data } = supabaseAdmin.storage
+      .from('foto-santri')
+      .getPublicUrl(fileName);
+
+    const foto_url = data.publicUrl;
+
+    // Simpan URL ke tabel users
+    await supabase.from('users').update({ foto_url }).eq('id', req.params.id);
+
+    res.json({ message: 'Foto berhasil diupload', foto_url });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
