@@ -713,6 +713,141 @@ if (lunasList.length > 0 && cicilanItem) {
 });
 
 // ============================================================
+// PEMBAYARAN CAMPURAN (beberapa tagihan sekaligus + item non-tagihan
+// dalam satu setoran, satu WA kwitansi gabungan)
+// ============================================================
+router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
+  try {
+    const {
+      user_id, tagihan_ids = [], item_lain, jumlah_total,
+      tanggal_bayar, keterangan, metode_bayar, kirim_notif
+    } = req.body;
+
+    if (!user_id) return res.status(400).json({ message: 'Santri wajib dipilih' });
+    if (!jumlah_total || Number(jumlah_total) <= 0) return res.status(400).json({ message: 'Jumlah total wajib diisi' });
+
+    const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
+    if (!u) return res.status(404).json({ message: 'Santri tidak ditemukan' });
+
+    const jumlahTotal = Math.round(Number(jumlah_total));
+    const jumlahLain = (item_lain && item_lain.jumlah) ? Math.round(Number(item_lain.jumlah)) : 0;
+    if (jumlahLain > jumlahTotal) {
+      return res.status(400).json({ message: 'Jumlah item non-tagihan tidak boleh melebihi total bayar' });
+    }
+    const jumlahUntukTagihan = jumlahTotal - jumlahLain;
+
+    // Ambil & hitung sisa tiap tagihan yang dipilih (logika sama seperti pembayaran-bulk)
+    let tagihan = [];
+    if (tagihan_ids.length > 0) {
+      const { data: tagihanList } = await supabase.from('tagihan').select('*, pembayaran(jumlah_bayar)').in('id', tagihan_ids);
+      tagihan = (tagihanList || []).map(t => {
+        const sudah = (t.pembayaran || []).reduce((a, p) => a + Number(p.jumlah_bayar), 0);
+        const sisa = Math.round(Number(t.jumlah) - sudah);
+        return { ...t, sudah, sisa };
+      });
+    }
+
+    let sisaUang = jumlahUntukTagihan;
+    let lunasList = [];
+    let cicilanItem = null;
+
+    for (const t of tagihan) {
+      if (sisaUang <= 0) break;
+      if (sisaUang >= t.sisa) {
+        sisaUang -= t.sisa;
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
+        await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
+        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah });
+      } else {
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
+        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang };
+        sisaUang = 0;
+      }
+    }
+
+    // Simpan item non-tagihan (kalau ada)
+    let itemLainSimpan = null;
+    if (jumlahLain > 0) {
+      itemLainSimpan = { keperluan: (item_lain && item_lain.keperluan) || 'Pembayaran lain', jumlah: jumlahLain };
+      await supabase.from('pembayaran_umum').insert([{
+        nama_pembayar: u.nama || u.nama_siswa,
+        keperluan: itemLainSimpan.keperluan,
+        jumlah: jumlahLain,
+        tanggal: tanggal_bayar,
+        keterangan: keterangan || '',
+        kategori: 'umum',
+        no_hp: u.no_hp || ''
+      }]);
+    }
+
+    const kelebihan = sisaUang; // uang tersisa setelah semua tagihan + item lain terbayar
+    const totalKekurangan = await getTotalKekurangan(user_id);
+
+    // Notifikasi in-app gabungan
+    const rincianList = [
+      ...lunasList.map(t => `${t.jenis}: Rp ${formatRp(t.dibayar)} (lunas)`),
+      ...(cicilanItem ? [`${cicilanItem.jenis}: Rp ${formatRp(cicilanItem.dibayar)} (cicilan, sisa Rp ${formatRp(cicilanItem.sisa)})`] : []),
+      ...(itemLainSimpan ? [`${itemLainSimpan.keperluan}: Rp ${formatRp(itemLainSimpan.jumlah)}`] : [])
+    ];
+    await simpanNotifikasi(
+      user_id,
+      '✅ Pembayaran Berhasil',
+      `Setoran Rp ${formatRp(jumlahTotal)} diterima. ${rincianList.join(', ')}${kelebihan > 0 ? `. Kelebihan Rp ${formatRp(kelebihan)}` : ''}`,
+      'bayar',
+      { lunasList, cicilanItem, itemLainSimpan, jumlah_total: jumlahTotal, kelebihan, tanggal_bayar }
+    );
+
+    res.json({
+      message: 'Pembayaran campuran berhasil',
+      lunas: lunasList.length,
+      cicilan: cicilanItem,
+      item_lain: itemLainSimpan,
+      kelebihan
+    });
+
+    // Kirim satu WA kwitansi gabungan (async, tidak blocking)
+    if (kirim_notif !== false && u.no_hp) {
+      const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅ (lunas)`).join('\n');
+      const rincianCicilan = cicilanItem ? `• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (cicilan, sisa Rp ${formatRp(cicilanItem.sisa)})\n` : '';
+      const rincianLain = itemLainSimpan ? `• ${itemLainSimpan.keperluan}: *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)\n` : '';
+
+      await kirimWA(u.no_hp,
+        `🧾 *KWITANSI PEMBAYARAN*\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
+        `Berikut kwitansi pembayaran santri:\n\n` +
+        `👤 Nama Santri    : *${u.nama_siswa}*\n` +
+        `📅 Tanggal Bayar  : ${tanggal_bayar}\n` +
+        `💵 Total Setoran  : *Rp ${formatRp(jumlahTotal)}*\n` +
+        `💳 Metode         : *${metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai'}*\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `📋 *Rincian Pembayaran:*\n${rincianLunas}${rincianLunas ? '\n' : ''}${rincianCicilan}${rincianLain}` +
+        (kelebihan > 0 ? `\n🎉 Sisa Uang : *Rp ${formatRp(kelebihan)}*\n📝 Ket       : ${keterangan || '-'}\n` : '') +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        (totalKekurangan > 0
+          ? `⚠️ *Total kekurangan semua tagihan:*\n💰 *Rp ${formatRp(totalKekurangan)}*\n━━━━━━━━━━━━━━━━━━\n` +
+            `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
+            `🏦 *Bank BRI*\n` +
+            `📋 No. Rek : *6665 0101 4641 533*\n` +
+            `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+            `📱 Konfirmasi Pembayaran:\n` +
+            `☎️ Hubungi : *081393695901*\n\n`
+          : `🎉 *Alhamdulillah, semua tagihan sudah lunas!*\n\n`) +
+        `Terima kasih atas pembayarannya 🙏\n` +
+        `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
+        `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
+        `_PP. Muhammadiyah Mambaul Ulum_\n` +
+        `_Mojo - Andong - Boyolali_`,
+        { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
+      );
+    }
+  } catch (err) {
+    console.error('Pembayaran campuran error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ============================================================
 // GET RIWAYAT CICILAN PER TAGIHAN
 // ============================================================
 router.get('/pembayaran/:tagihanId', verifyAdmin, async (req, res) => {
