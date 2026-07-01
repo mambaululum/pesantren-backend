@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp');
+const path = require('path');
+const { Resvg } = require('@resvg/resvg-js');
 const { supabase } = require('../config/db');
 const webpush = require('web-push');
 const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
@@ -135,7 +137,12 @@ const buatNoKwitansi = (prefix, refId) => {
   return `${prefix}/${yyyy}${mm}${dd}/${refId}-${acak}`;
 };
 
-const FONT_KWITANSI = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
+// PENTING: di server Vercel (serverless) tidak ada font sistem sama sekali,
+// jadi Arial/Helvetica tidak akan pernah ketemu -> teks jadi kotak-kotak.
+// Solusinya: pakai font yang kita bundel sendiri di folder /fonts, dan render
+// pakai resvg-js (bisa load font dari file langsung, tidak butuh fontconfig OS).
+const FONT_KWITANSI = "'Noto Sans', sans-serif";
+const FONT_FILE_KWITANSI = path.join(__dirname, '..', 'fonts', 'NotoSans-Variable.ttf');
 
 const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, items, total, metode, statusLabel, catatan }) => {
   const lebar = 800;
@@ -208,7 +215,19 @@ const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, item
     <text x="400" y="${yFooterKontak}" font-size="12" text-anchor="middle" fill="#999">Konfirmasi &amp; informasi: ${escapeXml(KONTAK_PONDOK)}</text>
   </svg>`;
 
-  return await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toBuffer();
+  // Render SVG -> PNG pakai resvg-js dengan font yang kita bundel sendiri
+  // (bukan pakai font sistem, karena di Vercel tidak ada font sistem).
+  const resvg = new Resvg(svg, {
+    font: {
+      fontFiles: [FONT_FILE_KWITANSI],
+      loadSystemFonts: false,
+      defaultFontFamily: 'Noto Sans'
+    }
+  });
+  const pngBuffer = resvg.render().asPng();
+
+  // Konversi PNG -> JPG pakai sharp (tahap ini tidak butuh font sama sekali)
+  return await sharp(pngBuffer).jpeg({ quality: 92 }).toBuffer();
 };
 
 // Upload buffer JPG kwitansi ke Supabase Storage (bucket: kwitansi), return public URL
