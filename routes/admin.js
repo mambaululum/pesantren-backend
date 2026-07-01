@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const sharp = require('sharp');
 const { supabase } = require('../config/db');
 const webpush = require('web-push');
 const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
@@ -112,6 +113,160 @@ const kirimWA = async (nomor, pesan, meta = {}) => {
 const getNomorTujuan = (nomor) => {
   const tujuan = (modeTesAktif && nomorTes) ? nomorTes : nomor;
   return formatNomor(tujuan);
+};
+
+// ============================================================
+// GENERATE KWITANSI JPG (render SVG -> JPEG pakai sharp)
+// ============================================================
+const escapeXml = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Nomor kontak pondok — TODO: ganti dengan nomor WA/telepon aktual admin
+const KONTAK_PONDOK = '0812-xxxx-xxxx';
+
+// Format nomor kwitansi yang lebih rapi & mudah dibaca wali santri
+// Contoh hasil: KWT/20260701/45-8231
+const buatNoKwitansi = (prefix, refId) => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const acak = Math.floor(1000 + Math.random() * 9000); // 4 digit acak biar tetap unik
+  return `${prefix}/${yyyy}${mm}${dd}/${refId}-${acak}`;
+};
+
+const FONT_KWITANSI = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
+
+const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, items, total, metode, statusLabel, catatan }) => {
+  const lebar = 800;
+  const tinggiBaris = Math.max(items.length, 1) * 38;
+  const yMulaiBaris = 330;
+  const yGarisBawah = yMulaiBaris + tinggiBaris + 10;
+  const yTotal = yGarisBawah + 40;
+  const yMetode = yTotal + 32;
+  const yCatatan = catatan ? yMetode + 28 : yMetode;
+  const yFooterDisclaimer = yCatatan + 50;
+  const yFooterKontak = yFooterDisclaimer + 20;
+  const tinggi = yFooterKontak + 30;
+
+  // Baris item dengan zebra-stripe (baris genap dikasih background halus) + garis tipis pemisah
+  const barisSvg = items.map((it, i) => {
+    const y = yMulaiBaris + (i * 38);
+    const rectY = y - 25;
+    const zebra = i % 2 === 1
+      ? `<rect x="50" y="${rectY}" width="700" height="38" fill="#f4f7f6"/>`
+      : '';
+    const pemisah = i < items.length - 1
+      ? `<line x1="60" y1="${y + 13}" x2="740" y2="${y + 13}" stroke="#eee" stroke-width="1"/>`
+      : '';
+    return `
+      ${zebra}
+      <text x="60" y="${y}" font-size="19" fill="#222">${escapeXml(it.label)}</text>
+      <text x="740" y="${y}" font-size="19" fill="#222" text-anchor="end">Rp ${formatRp(it.jumlah)}</text>
+      ${pemisah}`;
+  }).join('');
+
+  // Stempel/badge visual di pojok kanan atas biar terkesan resmi (bukan cuma teks disclaimer)
+  const stampSvg = `
+    <g transform="translate(732, 78) rotate(-14)" opacity="0.9">
+      <circle cx="0" cy="0" r="34" fill="none" stroke="#0b6e4f" stroke-width="2.5"/>
+      <circle cx="0" cy="0" r="28" fill="none" stroke="#0b6e4f" stroke-width="1"/>
+      <text x="0" y="-2" font-size="11" font-weight="bold" text-anchor="middle" fill="#0b6e4f">SAH</text>
+      <text x="0" y="11" font-size="7.5" text-anchor="middle" fill="#0b6e4f">SISTEM</text>
+    </g>`;
+
+  const svg = `
+  <svg width="${lebar}" height="${tinggi}" xmlns="http://www.w3.org/2000/svg" font-family="${FONT_KWITANSI}">
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    <rect x="0" y="0" width="100%" height="10" fill="#0b6e4f"/>
+    <text x="400" y="58" font-size="25" font-weight="bold" text-anchor="middle" fill="#0b6e4f">PONDOK PESANTREN MUHAMMADIYAH</text>
+    <text x="400" y="88" font-size="22" font-weight="bold" text-anchor="middle" fill="#0b6e4f">MAMBAUL ULUM</text>
+    <text x="400" y="111" font-size="14" text-anchor="middle" fill="#666">Mojo - Andong - Boyolali</text>
+    <line x1="50" y1="130" x2="750" y2="130" stroke="#0b6e4f" stroke-width="2"/>
+    ${stampSvg}
+
+    <text x="400" y="170" font-size="24" font-weight="bold" text-anchor="middle" fill="#111">KWITANSI PEMBAYARAN</text>
+    <text x="400" y="195" font-size="13" text-anchor="middle" fill="#888">No: ${escapeXml(noKwitansi)}</text>
+
+    <text x="60" y="240" font-size="18" fill="#333">Nama Wali</text>
+    <text x="220" y="240" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(namaWali)}</text>
+    <text x="60" y="270" font-size="18" fill="#333">Nama Santri</text>
+    <text x="220" y="270" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(namaSantri)}</text>
+    <text x="60" y="300" font-size="18" fill="#333">Tanggal Bayar</text>
+    <text x="220" y="300" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(tanggal)}</text>
+
+    <line x1="50" y1="315" x2="750" y2="315" stroke="#ccc" stroke-width="1"/>
+    ${barisSvg}
+    <line x1="50" y1="${yGarisBawah}" x2="750" y2="${yGarisBawah}" stroke="#0b6e4f" stroke-width="2"/>
+
+    <text x="60" y="${yTotal}" font-size="20" font-weight="bold" fill="#111">TOTAL DIBAYAR</text>
+    <text x="740" y="${yTotal}" font-size="20" font-weight="bold" text-anchor="end" fill="#0b6e4f">Rp ${formatRp(total)}</text>
+    <text x="60" y="${yMetode}" font-size="15" fill="#555">Metode: ${escapeXml(metode || '-')}&#160;&#160;&#160;Status: ${escapeXml(statusLabel || '-')}</text>
+    ${catatan ? `<text x="60" y="${yCatatan}" font-size="14" fill="#777">Ket: ${escapeXml(catatan)}</text>` : ''}
+
+    <text x="400" y="${yFooterDisclaimer}" font-size="13" text-anchor="middle" fill="#999">Kwitansi ini dibuat otomatis oleh sistem, sah tanpa tanda tangan basah</text>
+    <text x="400" y="${yFooterKontak}" font-size="12" text-anchor="middle" fill="#999">Konfirmasi &amp; informasi: ${escapeXml(KONTAK_PONDOK)}</text>
+  </svg>`;
+
+  return await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toBuffer();
+};
+
+// Upload buffer JPG kwitansi ke Supabase Storage (bucket: kwitansi), return public URL
+const uploadKwitansiJPG = async (buffer, namaFile) => {
+  try {
+    const filePath = `jpg/${Date.now()}_${namaFile.replace(/[^a-zA-Z0-9_-]/g, '_')}.jpg`;
+    const { error } = await supabase.storage.from('kwitansi').upload(filePath, buffer, {
+      contentType: 'image/jpeg',
+      upsert: true
+    });
+    if (error) { console.log('Upload kwitansi JPG error:', error.message); return null; }
+    const { data } = supabase.storage.from('kwitansi').getPublicUrl(filePath);
+    return data.publicUrl;
+  } catch (e) {
+    console.log('Upload kwitansi JPG exception:', e.message);
+    return null;
+  }
+};
+
+// Kirim WA + lampiran gambar kwitansi (link JPG ikut disisipkan di teks juga)
+const kirimWAKwitansi = async (nomor, pesan, imageUrl, meta = {}) => {
+  if (!nomor || nomor.trim() === '') return;
+  if (!process.env.FONNTE_TOKEN) { console.log('WA: FONNTE_TOKEN belum diisi di .env'); return; }
+
+  const nomorFormatted = getNomorTujuan(nomor);
+  const pesanFinal = pesan + (imageUrl ? `\n\n🧾 Kwitansi (gambar):\n${imageUrl}` : '');
+  let status = 'terkirim';
+  try {
+    const formData = new FormData();
+    formData.append('target', nomorFormatted);
+    formData.append('message', pesanFinal);
+    if (imageUrl) {
+      formData.append('url', imageUrl);   // lampiran gambar dikirim langsung sebagai media WA
+      formData.append('filename', 'kwitansi.jpg');
+    }
+    const response = await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: { 'Authorization': process.env.FONNTE_TOKEN },
+      body: formData
+    });
+    const hasil = await response.json();
+    console.log('WA kwitansi kirim ke', nomorFormatted, ':', JSON.stringify(hasil));
+    if (!hasil.status) { status = 'gagal'; console.log('WA gagal:', hasil.reason || hasil.message || '-'); }
+  } catch (e) {
+    status = 'gagal';
+    console.log('WA kwitansi error:', e.message);
+  }
+
+  try {
+    await supabase.from('riwayat_wa').insert([{
+      no_hp: nomorFormatted,
+      nama_wali: meta.nama_wali || '',
+      nama_siswa: meta.nama_siswa || '',
+      pesan: pesanFinal,
+      status,
+      jenis: meta.jenis || 'kwitansi'
+    }]);
+  } catch (e) { console.log('Riwayat WA error:', e.message); }
 };
 
 // ============================================================
@@ -491,7 +646,22 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
       try {
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', t.user_id).single();
         if (u && u.no_hp && kirim_notif !== false) {
-          await kirimWA(u.no_hp,
+          let imageUrl = null;
+          try {
+            const jpgBuffer = await buatKwitansiJPG({
+              noKwitansi: buatNoKwitansi('KWT', tagihan_id),
+              namaWali: u.nama,
+              namaSantri: u.nama_siswa,
+              tanggal: tanggal_bayar,
+              items: [{ label: t.jenis, jumlah: jumlah_bayar }],
+              total: jumlah_bayar,
+              metode: '-',
+              statusLabel: 'LUNAS'
+            });
+            imageUrl = await uploadKwitansiJPG(jpgBuffer, `kwitansi_${u.nama_siswa}`);
+          } catch (e) { console.log('Gagal generate JPG kwitansi:', e.message); }
+
+          await kirimWAKwitansi(u.no_hp,
             `🧾 *KWITANSI PEMBAYARAN*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
@@ -508,6 +678,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
             `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
+            imageUrl,
             { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
           );
         }
@@ -648,7 +819,26 @@ if (lunasList.length > 0 && cicilanItem) {
     // Kirim WA secara async (tidak blocking)
     if (kirim_notif !== false && u.no_hp && lunasList.length > 0) {
       const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n');
-      await kirimWA(u.no_hp,
+
+      let imageUrl = null;
+      try {
+        const itemsJPG = lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar }));
+        if (cicilanItem) itemsJPG.push({ label: `${cicilanItem.jenis} (cicilan)`, jumlah: cicilanItem.dibayar });
+        const jpgBuffer = await buatKwitansiJPG({
+          noKwitansi: buatNoKwitansi('BLK', user_id),
+          namaWali: u.nama,
+          namaSantri: u.nama_siswa,
+          tanggal: tanggal_bayar,
+          items: itemsJPG,
+          total: jumlah_total,
+          metode: metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai',
+          statusLabel: cicilanItem ? 'SEBAGIAN LUNAS' : 'LUNAS',
+          catatan: kelebihan > 0 ? `Sisa uang: Rp ${formatRp(kelebihan)}` : (keterangan || '')
+        });
+        imageUrl = await uploadKwitansiJPG(jpgBuffer, `kwitansi_${u.nama_siswa}`);
+      } catch (e) { console.log('Gagal generate JPG kwitansi bulk:', e.message); }
+
+      await kirimWAKwitansi(u.no_hp,
         `🧾 *KWITANSI PEMBAYARAN*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
@@ -667,6 +857,7 @@ if (lunasList.length > 0 && cicilanItem) {
         `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
+        imageUrl,
         { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
       );
     }
@@ -808,7 +999,27 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
     // Kirim WA Kwitansi (sama format seperti pembayaran-bulk) — hanya kalau ada yang lunas atau item non-tagihan
     if (kirim_notif !== false && u.no_hp && (lunasList.length > 0 || itemLainSimpan)) {
       const rincianLunas = lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅`).join('\n');
-      await kirimWA(u.no_hp,
+
+      let imageUrl = null;
+      try {
+        const itemsJPG = lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar }));
+        if (cicilanItem) itemsJPG.push({ label: `${cicilanItem.jenis} (cicilan)`, jumlah: cicilanItem.dibayar });
+        if (itemLainSimpan) itemsJPG.push({ label: `${itemLainSimpan.keperluan} (non-tagihan)`, jumlah: itemLainSimpan.jumlah });
+        const jpgBuffer = await buatKwitansiJPG({
+          noKwitansi: buatNoKwitansi('CMP', user_id),
+          namaWali: u.nama,
+          namaSantri: u.nama_siswa,
+          tanggal: tanggal_bayar,
+          items: itemsJPG,
+          total: jumlahTotal,
+          metode: metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai',
+          statusLabel: cicilanItem ? 'SEBAGIAN LUNAS' : 'LUNAS',
+          catatan: kelebihan > 0 ? `Sisa uang: Rp ${formatRp(kelebihan)}` : (keterangan || '')
+        });
+        imageUrl = await uploadKwitansiJPG(jpgBuffer, `kwitansi_${u.nama_siswa}`);
+      } catch (e) { console.log('Gagal generate JPG kwitansi campuran:', e.message); }
+
+      await kirimWAKwitansi(u.no_hp,
         `🧾 *KWITANSI PEMBAYARAN*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
@@ -828,6 +1039,7 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
         `_dan melapangkan rizqi Bapak/Ibu_ Aamiin🤲\n\n` +
         `_PP. Muhammadiyah Mambaul Ulum_\n` +
         `_Mojo - Andong - Boyolali_`,
+        imageUrl,
         { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa }
       );
     }
