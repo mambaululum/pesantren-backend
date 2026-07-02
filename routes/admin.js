@@ -26,13 +26,19 @@ const kirimPushNotif = async (user_id, judul, pesan) => {
       .select('subscription')
       .eq('user_id', user_id)
       .single();
-    if (!data) return;
+    if (!data) {
+      console.log('Push notif skip: subscription tidak ditemukan untuk user_id', user_id);
+      return;
+    }
     await webpush.sendNotification(
       data.subscription,
       JSON.stringify({ title: judul, body: pesan })
     );
   } catch (e) {
     console.log('Push notif error:', e.message);
+    console.log('Push notif statusCode:', e.statusCode);
+    console.log('Push notif body:', e.body);
+    console.log('Push notif endpoint:', e.endpoint);
   }
 };
 // ============================================================
@@ -2103,6 +2109,41 @@ router.post('/push-subscribe', async (req, res) => {
     res.json({ message: 'ok' });
   } catch (e) {
     res.status(500).json({ message: e.message });
+  }
+});
+// Kirim push notifikasi percobaan ke diri sendiri (untuk testing)
+router.post('/test-push', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const { data, error } = await supabase
+      .from('push_subscriptions')
+      .select('subscription')
+      .eq('user_id', decoded.id)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ message: 'Belum ada subscription tersimpan. Login ulang dulu di HP dan pastikan izin notifikasi sudah diberikan.' });
+    }
+
+    await webpush.sendNotification(
+      data.subscription,
+      JSON.stringify({
+        title: '🔔 Tes Notifikasi',
+        body: 'Kalau ini muncul di HP kamu, berarti push notification berhasil!',
+        url: '/'
+      })
+    );
+
+    res.json({ message: 'Notifikasi tes berhasil dikirim. Cek HP kamu.' });
+  } catch (e) {
+    // Subscription expired/invalid biasanya balikin statusCode 410 dari web-push
+    if (e.statusCode === 410 || e.statusCode === 404) {
+      return res.status(410).json({ message: 'Subscription sudah tidak valid/expired. Login ulang di HP untuk subscribe lagi.' });
+    }
+    res.status(500).json({ message: 'Gagal kirim: ' + e.message });
   }
 });
 // ============================================================
