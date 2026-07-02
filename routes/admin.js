@@ -2111,6 +2111,33 @@ router.post('/push-subscribe', async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
+// Hapus push subscription (dipanggil pas logout) — biar HP yg udah logout
+// nggak terus-terusan kebagian notif punya akun lain di device yg sama
+router.post('/push-unsubscribe', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { endpoint } = req.body || {};
+ 
+    // Hapus subscription milik user yg logout ini
+    await supabase.from('push_subscriptions').delete().eq('user_id', decoded.id);
+ 
+    // Kalau endpoint dikirim dari client, bersihin juga baris user LAIN yang
+    // kebetulan nunjuk ke endpoint (device) yang sama — ini yang bikin
+    // notif "nyasar" ke akun lain yang pernah login di HP yang sama.
+    if (endpoint) {
+      await supabase
+        .from('push_subscriptions')
+        .delete()
+        .contains('subscription', { endpoint });
+    }
+ 
+    res.json({ message: 'ok' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 // Kirim push notifikasi percobaan ke diri sendiri (untuk testing)
 router.post('/test-push', async (req, res) => {
   const token = req.headers['authorization']?.split(' ')[1];
