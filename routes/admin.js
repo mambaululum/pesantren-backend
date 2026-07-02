@@ -2183,5 +2183,39 @@ router.post('/santri/:id/foto', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
+// ============================================================
+// UPLOAD FOTO SANTRI
+// ============================================================
+router.post('/santri/:id/foto', verifyAdmin, async (req, res) => {
+  try {
+    const { foto_base64, mime_type } = req.body;
+    if (!foto_base64) return res.status(400).json({ message: 'Foto tidak ada' });
+
+    const ext = mime_type === 'image/png' ? 'png' : 'jpg';
+    const fileName = `santri-${req.params.id}.${ext}`;
+    const buffer = Buffer.from(foto_base64, 'base64');
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('foto-santri')
+      .upload(fileName, buffer, {
+        contentType: mime_type || 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadError) return res.status(500).json({ message: uploadError.message });
+
+    const { data } = supabaseAdmin.storage
+      .from('foto-santri')
+      .getPublicUrl(fileName);
+
+    const foto_url = data.publicUrl;
+
+    await supabase.from('users').update({ foto_url }).eq('id', req.params.id);
+
+    res.json({ message: 'Foto berhasil diupload', foto_url });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
