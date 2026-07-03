@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const QRCode = require('qrcode');
 const { Resvg } = require('@resvg/resvg-js');
 const { supabase } = require('../config/db');
 const webpush = require('web-push');
@@ -132,6 +135,42 @@ const escapeXml = (s) => String(s == null ? '' : s)
 // Nomor kontak pondok — TODO: ganti dengan nomor WA/telepon aktual admin
 const KONTAK_PONDOK = '0812-xxxx-xxxx';
 
+// Logo & stempel resmi pondok — dibundel sekali saat server start (bukan dibaca ulang tiap request)
+// Taruh file aslinya di backend/assets/logo.jpg dan backend/assets/stempel.png
+const LOGO_FILE = path.join(__dirname, '..', 'assets', 'logo.jpg');
+const STEMPEL_FILE = path.join(__dirname, '..', 'assets', 'stempel.png');
+const LOGO_BASE64 = fs.existsSync(LOGO_FILE) ? fs.readFileSync(LOGO_FILE).toString('base64') : null;
+const STEMPEL_BASE64 = fs.existsSync(STEMPEL_FILE) ? fs.readFileSync(STEMPEL_FILE).toString('base64') : null;
+
+// ============================================================
+// ANTI-PEMALSUAN KWITANSI: signed URL (HMAC), bukan cuma cap visual
+// Cap/stempel di gambar bisa saja ditiru orang, tapi sig ini dihitung dari
+// SECRET yang cuma ada di server -> kalau nominal/nama diubah di gambar hasil
+// edit, hasil hitung ulang sig pas verifikasi pasti tidak akan cocok.
+// ============================================================
+const KWITANSI_SECRET = process.env.KWITANSI_SECRET || process.env.JWT_SECRET || 'ganti-secret-kwitansi-di-env';
+const BASE_URL_VERIFIKASI = process.env.APP_URL || 'https://pesantren-backend.vercel.app';
+
+const buatSignatureKwitansi = (noKwitansi, total, tanggal, namaSantri) => {
+  return crypto.createHmac('sha256', KWITANSI_SECRET)
+    .update(`${noKwitansi}|${Math.round(Number(total))}|${tanggal}|${namaSantri}`)
+    .digest('hex')
+    .slice(0, 10)
+    .toUpperCase();
+};
+
+const buatUrlVerifikasiKwitansi = (noKwitansi, total, tanggal, namaSantri) => {
+  const sig = buatSignatureKwitansi(noKwitansi, total, tanggal, namaSantri);
+  const qs = new URLSearchParams({
+    no: noKwitansi,
+    t: String(Math.round(Number(total))),
+    d: tanggal,
+    s: namaSantri,
+    sig
+  });
+  return { url: `${BASE_URL_VERIFIKASI}/api/admin/verify?${qs.toString()}`, sig };
+};
+
 // Format nomor kwitansi yang lebih rapi & mudah dibaca wali santri
 // Contoh hasil: KWT/20260701/45-8231
 const buatNoKwitansi = (prefix, refId) => {
@@ -158,9 +197,17 @@ const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, item
   const yTotal = yGarisBawah + 40;
   const yMetode = yTotal + 32;
   const yCatatan = catatan ? yMetode + 28 : yMetode;
-  const yFooterDisclaimer = yCatatan + 50;
+  // Blok tanda tangan + stempel asli
+  const yTTDLabel = yCatatan + 55;
+  const yGarisTTD = yTTDLabel + 95;
+  const yTTDNama = yGarisTTD + 18;
+  // Footer disclaimer + kontak
+  const yFooterDisclaimer = yTTDNama + 40;
   const yFooterKontak = yFooterDisclaimer + 20;
-  const tinggi = yFooterKontak + 30;
+  // Blok QR + kode verifikasi paling bawah
+  const yQRTop = yFooterKontak + 24;
+  const qrSize = 92;
+  const tinggi = yQRTop + qrSize + 30;
 
   // Baris item dengan zebra-stripe (baris genap dikasih background halus) + garis tipis pemisah
   const barisSvg = items.map((it, i) => {
@@ -179,24 +226,34 @@ const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, item
       ${pemisah}`;
   }).join('');
 
-  // Stempel/badge visual di pojok kanan atas biar terkesan resmi (bukan cuma teks disclaimer)
-  const stampSvg = `
-    <g transform="translate(732, 78) rotate(-14)" opacity="0.9">
-      <circle cx="0" cy="0" r="34" fill="none" stroke="#0b6e4f" stroke-width="2.5"/>
-      <circle cx="0" cy="0" r="28" fill="none" stroke="#0b6e4f" stroke-width="1"/>
-      <text x="0" y="-2" font-size="11" font-weight="bold" text-anchor="middle" fill="#0b6e4f">SAH</text>
-      <text x="0" y="11" font-size="7.5" text-anchor="middle" fill="#0b6e4f">SISTEM</text>
-    </g>`;
+  // Logo pondok di kop surat (kalau file belum ada di /assets, otomatis dilewati, tidak error)
+  const logoSvg = LOGO_BASE64
+    ? `<image x="42" y="16" width="76" height="76" href="data:image/jpeg;base64,${LOGO_BASE64}"/>`
+    : '';
+
+  // Stempel asli pondok, diletakkan menindih garis tanda tangan biar kesan resmi (bukan lagi lingkaran teks buatan)
+  const stempelSvg = STEMPEL_BASE64
+    ? `<image x="600" y="${yTTDLabel - 14}" width="118" height="126" href="data:image/png;base64,${STEMPEL_BASE64}" opacity="0.92" transform="rotate(-6 659 ${yTTDLabel + 49})"/>`
+    : '';
+
+  // Signature URL + QR code untuk verifikasi keaslian (lihat buatUrlVerifikasiKwitansi)
+  const { url: urlVerifikasi, sig: kodeVerifikasi } = buatUrlVerifikasiKwitansi(noKwitansi, total, tanggal, namaSantri);
+  let qrSvg = '';
+  try {
+    const qrDataUrl = await QRCode.toDataURL(urlVerifikasi, { margin: 1, width: 300, color: { dark: '#0b6e4f', light: '#ffffffff' } });
+    const qrBase64 = qrDataUrl.split(',')[1];
+    qrSvg = `<image x="50" y="${yQRTop}" width="${qrSize}" height="${qrSize}" href="data:image/png;base64,${qrBase64}"/>`;
+  } catch (e) { console.log('Gagal generate QR kwitansi:', e.message); }
 
   const svg = `
   <svg width="${lebar}" height="${tinggi}" xmlns="http://www.w3.org/2000/svg" font-family="${FONT_KWITANSI}">
     <rect width="100%" height="100%" fill="#ffffff"/>
     <rect x="0" y="0" width="100%" height="10" fill="#0b6e4f"/>
+    ${logoSvg}
     <text x="400" y="58" font-size="25" font-weight="bold" text-anchor="middle" fill="#0b6e4f">PONDOK PESANTREN MUHAMMADIYAH</text>
     <text x="400" y="88" font-size="22" font-weight="bold" text-anchor="middle" fill="#0b6e4f">MAMBAUL ULUM</text>
     <text x="400" y="111" font-size="14" text-anchor="middle" fill="#666">Mojo - Andong - Boyolali</text>
     <line x1="50" y1="130" x2="750" y2="130" stroke="#0b6e4f" stroke-width="2"/>
-    ${stampSvg}
 
     <text x="400" y="170" font-size="24" font-weight="bold" text-anchor="middle" fill="#111">KWITANSI PEMBAYARAN</text>
     <text x="400" y="195" font-size="13" text-anchor="middle" fill="#888">No: ${escapeXml(noKwitansi)}</text>
@@ -217,8 +274,20 @@ const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, item
     <text x="60" y="${yMetode}" font-size="15" fill="#555">Metode: ${escapeXml(metode || '-')}&#160;&#160;&#160;Status: ${escapeXml(statusLabel || '-')}</text>
     ${catatan ? `<text x="60" y="${yCatatan}" font-size="14" fill="#777">Ket: ${escapeXml(catatan)}</text>` : ''}
 
+    <text x="740" y="${yTTDLabel}" font-size="14" text-anchor="end" fill="#555">Mengetahui,</text>
+    <text x="740" y="${yTTDLabel + 16}" font-size="14" text-anchor="end" fill="#555">Bendahara Pondok</text>
+    ${stempelSvg}
+    <line x1="600" y1="${yGarisTTD}" x2="740" y2="${yGarisTTD}" stroke="#333" stroke-width="1"/>
+    <text x="740" y="${yTTDNama}" font-size="12" text-anchor="end" fill="#555">( Bendahara )</text>
+
     <text x="400" y="${yFooterDisclaimer}" font-size="13" text-anchor="middle" fill="#999">Kwitansi ini dibuat otomatis oleh sistem, sah tanpa tanda tangan basah</text>
     <text x="400" y="${yFooterKontak}" font-size="12" text-anchor="middle" fill="#999">Konfirmasi &amp; informasi: ${escapeXml(KONTAK_PONDOK)}</text>
+
+    ${qrSvg}
+    <text x="155" y="${yQRTop + 30}" font-size="12" font-weight="bold" fill="#0b6e4f">Scan untuk verifikasi keaslian</text>
+    <text x="155" y="${yQRTop + 50}" font-size="11" fill="#777">Kwitansi ini asli hanya jika hasil scan</text>
+    <text x="155" y="${yQRTop + 66}" font-size="11" fill="#777">cocok dengan data di sistem.</text>
+    <text x="155" y="${yQRTop + 88}" font-size="12" fill="#333">Kode Verifikasi: <tspan font-weight="bold" fill="#0b6e4f">${escapeXml(kodeVerifikasi)}</tspan></text>
   </svg>`;
 
   // Render SVG -> PNG pakai resvg-js dengan font yang kita bundel sendiri
@@ -1779,6 +1848,52 @@ router.get('/riwayat-wa', verifyAdmin, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// ============================================================
+// VERIFIKASI KEASLIAN KWITANSI (PUBLIK, TANPA LOGIN)
+// Dibuka lewat scan QR / link yang tertera di kwitansi JPG.
+// Sig dihitung ulang dari KWITANSI_SECRET (server-only) dan dibandingkan
+// dengan sig yang dibawa di URL -> kalau nominal/nama/tanggal di kwitansi
+// diedit (mis. pakai Photoshop), sig baru tidak akan pernah cocok.
+// ============================================================
+router.get('/verify', (req, res) => {
+  const { no, t, d, s, sig } = req.query;
+  const halaman = (valid, pesan) => `
+    <!DOCTYPE html>
+    <html lang="id"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Verifikasi Kwitansi</title>
+    <style>
+      body{font-family:system-ui,sans-serif;background:#f0fdf4;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:16px;box-sizing:border-box;}
+      .card{background:#fff;max-width:420px;width:100%;border-radius:16px;padding:28px 24px;box-shadow:0 10px 30px rgba(0,0,0,0.08);text-align:center;}
+      .icon{font-size:48px;margin-bottom:8px;}
+      h1{font-size:18px;margin:0 0 6px;color:${valid ? '#0b6e4f' : '#dc2626'};}
+      p.sub{color:#64748b;font-size:13px;margin:0 0 18px;}
+      table{width:100%;text-align:left;border-collapse:collapse;font-size:14px;}
+      td{padding:8px 0;border-bottom:1px solid #f1f5f9;}
+      td.label{color:#64748b;width:40%;}
+      td.val{font-weight:600;color:#111;}
+    </style></head>
+    <body><div class="card">
+      <div class="icon">${valid ? '✅' : '⚠️'}</div>
+      <h1>${valid ? 'Kwitansi ASLI & Terverifikasi' : 'Kwitansi Tidak Valid'}</h1>
+      <p class="sub">${pesan}</p>
+      ${valid ? `<table>
+        <tr><td class="label">No. Kwitansi</td><td class="val">${escapeXml(no || '-')}</td></tr>
+        <tr><td class="label">Nama Santri</td><td class="val">${escapeXml(s || '-')}</td></tr>
+        <tr><td class="label">Tanggal Bayar</td><td class="val">${escapeXml(d || '-')}</td></tr>
+        <tr><td class="label">Jumlah</td><td class="val">Rp ${formatRp(t || 0)}</td></tr>
+      </table>` : ''}
+    </div></body></html>`;
+
+  if (!no || !t || !d || !s || !sig) {
+    return res.status(400).send(halaman(false, 'Data verifikasi tidak lengkap.'));
+  }
+  const sigSeharusnya = buatSignatureKwitansi(no, t, d, s);
+  if (sig.toUpperCase() !== sigSeharusnya) {
+    return res.status(400).send(halaman(false, 'Data pada kwitansi tidak cocok dengan sistem — kemungkinan sudah diubah/dipalsukan.'));
+  }
+  return res.send(halaman(true, 'Data kwitansi ini cocok dengan catatan resmi sistem keuangan pondok.'));
 });
 
 // ============================================================
