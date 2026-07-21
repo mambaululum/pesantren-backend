@@ -1652,7 +1652,7 @@ router.get('/semester/daftar', verifyAdmin, async (req, res) => {
 // ============================================================
 router.post('/semester', verifyAdmin, async (req, res) => {
   try {
-    const { nama_semester, tagihan_baru, semester_asal, duplikat_otomatis } = req.body;
+    const { nama_semester, tagihan_baru, semester_asal, duplikat_otomatis, kirim_notif } = req.body;
     if (!nama_semester || !nama_semester.trim())
       return res.status(400).json({ message: 'nama_semester wajib diisi' });
 
@@ -1733,6 +1733,7 @@ router.post('/semester', verifyAdmin, async (req, res) => {
     });
 
     // === NOTIFIKASI WA (background) ===
+    if (kirim_notif === false) return;
     const userIds = [...new Set(finalTagihan.map(t => t.user_id))];
     for (const uid of userIds) {
       try {
