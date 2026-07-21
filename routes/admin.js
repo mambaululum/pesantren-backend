@@ -2177,7 +2177,9 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
     const { data, error } = await supabase.rpc('get_riwayat_pembayaran');
     if (error) {
       // fallback manual join
-      let query = supabase.from('pembayaran').select('*').eq('arsip', false).order('tanggal_bayar', { ascending: false });
+      let query = supabase.from('pembayaran').select('*').eq('arsip', false)
+        .order('tanggal_bayar', { ascending: false })
+        .order('id', { ascending: false }); // tie-break: pembayaran tanggal sama -> yang terakhir diinput muncul duluan
       if (dariISO && sampaiISO) {
         query = query.gte('tanggal_bayar', dariISO).lt('tanggal_bayar', sampaiISO);
       } else {
@@ -2192,9 +2194,14 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
       return res.json(result);
     }
 
-    // RPC berhasil -> filter per bulan di sini (server) kalau parameter bulan dikirim,
-    // supaya payload yang dikirim ke frontend tetap ringkas.
-    let result = data || [];
+    // RPC berhasil -> urutkan berdasarkan waktu bayar (RPC tidak menjamin urutan),
+    // tanggal_bayar terlama duluan, tie-break pakai id (mendekati urutan input asli
+    // karena kolom tanggal_bayar cuma simpan tanggal, tidak simpan jam).
+    let result = (data || []).slice().sort((a, b) => {
+      const dt = new Date(a.tanggal_bayar) - new Date(b.tanggal_bayar);
+      if (dt !== 0) return dt;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
     if (dariISO && sampaiISO) {
       const dariMs = new Date(dariISO).getTime();
       const sampaiMs = new Date(sampaiISO).getTime();
