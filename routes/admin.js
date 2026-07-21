@@ -133,7 +133,7 @@ const escapeXml = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Nomor kontak pondok — TODO: ganti dengan nomor WA/telepon aktual admin
-const KONTAK_PONDOK = '0812-xxxx-xxxx';
+const KONTAK_PONDOK = '081393695901';
 
 // Logo & stempel resmi pondok — dibundel sekali saat server start (bukan dibaca ulang tiap request)
 // Taruh file aslinya di backend/assets/logo.jpg dan backend/assets/stempel.png
