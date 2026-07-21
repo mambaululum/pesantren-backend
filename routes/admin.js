@@ -722,9 +722,28 @@ const getTotalKekurangan = async (uid) => {
 };
 
 // ============================================================
+// HELPER: urutan bulan tahun ajaran pondok (mulai Juli s/d Juni).
+// Ganti urutan array ini kalau tahun ajaran pondok mulai bulan lain.
+// ============================================================
+const URUTAN_BULAN = [
+  'juli', 'agustus', 'september', 'oktober', 'november', 'desember',
+  'januari', 'februari', 'maret', 'april', 'mei', 'juni'
+];
+
+// Cari nama bulan di dalam teks jenis tagihan (mis. "Syahriyah September" -> 2)
+// Balikin null kalau jenis tagihan tidak mengandung nama bulan (mis. tagihan semester/barang).
+const getIndeksBulan = (jenisText) => {
+  const teks = String(jenisText || '').toLowerCase();
+  const idx = URUTAN_BULAN.findIndex((bulan) => teks.includes(bulan));
+  return idx === -1 ? null : idx;
+};
+
+// ============================================================
 // HELPER: rekap lengkap tagihan santri — total tagihan keseluruhan,
 // total kekurangan, dan daftar tagihan yang masih belum lunas
-// (diurutkan dari nominal sisa terbesar) untuk dipakai di kwitansi WA.
+// (diurutkan berdasarkan urutan bulan tahun ajaran; tagihan non-bulanan
+// seperti Kesantrian/Buku Pondok ditaruh di akhir, urut nominal terbesar)
+// untuk dipakai di kwitansi WA.
 // ============================================================
 const getRekapTagihanSantri = async (uid) => {
   const { data: tagihanList } = await supabase.from('tagihan').select('id, jenis, jumlah, status').eq('user_id', uid);
@@ -743,7 +762,17 @@ const getRekapTagihanSantri = async (uid) => {
       belumLunas.push({ jenis: t.jenis, sisa });
     }
   }
-  belumLunas.sort((a, b) => b.sisa - a.sisa); // urut dari tagihan dengan sisa terbesar
+  // Urut berdasarkan bulan tahun ajaran (Syahriyah Juli, Agustus, ...).
+  // Tagihan yang tidak punya nama bulan (Kesantrian, Buku Pondok, dll)
+  // ditaruh di akhir daftar, sesama non-bulanan diurutkan dari nominal terbesar.
+  belumLunas.sort((a, b) => {
+    const bulanA = getIndeksBulan(a.jenis);
+    const bulanB = getIndeksBulan(b.jenis);
+    if (bulanA !== null && bulanB !== null) return bulanA - bulanB;
+    if (bulanA !== null) return -1; // a bulanan, b bukan -> a duluan
+    if (bulanB !== null) return 1;  // b bulanan, a bukan -> b duluan
+    return b.sisa - a.sisa; // sama-sama non-bulanan -> urut nominal terbesar
+  });
   return { totalTagihan, totalKekurangan, belumLunas };
 };
 
@@ -785,7 +814,7 @@ const buatPesanKwitansiLengkap = ({ u, tanggal_bayar, metode_bayar, rincianItems
     `📊 *Total Tagihan Keseluruhan* : Rp ${formatRp(rekap.totalTagihan)}\n` +
     (rekap.totalKekurangan > 0
       ? `⚠️ *Sisa Tagihan Belum Dibayar* : Rp ${formatRp(rekap.totalKekurangan)}\n\n` +
-        `📌 *Rincian tagihan yang belum lunas* (urut dari nominal terbesar):\n${daftarBelumLunasText}\n` +
+        `📌 *Rincian tagihan yang belum lunas* (urut dari bulan terlama):\n${daftarBelumLunasText}\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `Mohon kesediaan Bapak/Ibu untuk melunasi sisa tagihan di atas, bisa langsung ke bagian administrasi pondok atau transfer ke:\n\n` +
         `🏦 *${REKENING_PONDOK.bank}*\n` +
