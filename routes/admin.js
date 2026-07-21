@@ -1874,6 +1874,32 @@ router.get('/semester', verifyAdmin, async (req, res) => {
 // ============================================================
 let jadwalPengingat = { aktif: false, tanggal: 1, jam: '08:00', intervalId: null };
 
+// ============================================================
+// HELPER: bangun teks rincian tagihan belum lunas untuk pesan
+// "Pengingat Tagihan" WA — diurutkan pakai urutan bulan tahun ajaran
+// yang sama seperti kwitansi (getIndeksBulan), bukan urutan tagihan
+// dibuat di database, supaya wali santri lihat urutan yang masuk akal.
+// ============================================================
+const buatRincianPengingat = (tagihanList) => {
+  const items = (tagihanList || []).map(t => {
+    const sudah = (t.pembayaran || []).reduce((a, p) => a + Number(p.jumlah_bayar), 0);
+    const sisa = Math.round(Number(t.jumlah) - sudah);
+    return { jenis: t.jenis, jumlah: t.jumlah, sudah, sisa };
+  });
+  items.sort((a, b) => {
+    const bulanA = getIndeksBulan(a.jenis);
+    const bulanB = getIndeksBulan(b.jenis);
+    if (bulanA !== null && bulanB !== null) return bulanA - bulanB;
+    if (bulanA !== null) return -1;
+    if (bulanB !== null) return 1;
+    return b.sisa - a.sisa;
+  });
+  return items.map(t => t.sudah > 0
+    ? `• ${t.jenis}\n  Sisa: *Rp ${formatRp(t.sisa)}*`
+    : `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`
+  ).join('\n');
+};
+
 const kirimPengingatSemua = async () => {
   const { data: users } = await supabase.from('users').select('id, nama, nama_siswa, no_hp').not('no_hp', 'is', null).neq('no_hp', '');
   let terkirim = 0;
@@ -1882,13 +1908,7 @@ const kirimPengingatSemua = async () => {
     if (sisa <= 0) continue;
     try {
       const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
-      const rincian = (tagihan || []).map(t => {
-        const sudah = (t.pembayaran || []).reduce((a, p) => a + Number(p.jumlah_bayar), 0);
-        const sisaT = Math.round(Number(t.jumlah) - sudah);
-        return sudah > 0
-          ? `• ${t.jenis}\n  Sisa: *Rp ${formatRp(sisaT)}*`
-          : `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`;
-      }).join('\n');
+      const rincian = buatRincianPengingat(tagihan);
 
       await kirimWA(u.no_hp,
         `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
@@ -1956,11 +1976,7 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
     if (sisa <= 0) return res.status(400).json({ message: 'Santri tidak punya tunggakan' });
 
     const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
-    const rincian = (tagihan || []).map(t => {
-      const sudah = (t.pembayaran || []).reduce((a, p) => a + Number(p.jumlah_bayar), 0);
-      const sisaT = Math.round(Number(t.jumlah) - sudah);
-      return sudah > 0 ? `• ${t.jenis}\n  Sisa: *Rp ${formatRp(sisaT)}*` : `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`;
-    }).join('\n');
+    const rincian = buatRincianPengingat(tagihan);
 
     await kirimWA(u.no_hp,
       `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
