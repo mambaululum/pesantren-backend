@@ -2633,5 +2633,84 @@ router.post('/santri/:id/foto', verifyAdmin, async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
+
+// ============================================================
+// BUKU KAS / KEUANGAN — catatan tanggal, debit, kredit, saldo berjalan, catatan
+// Saldo TIDAK disimpan di tabel — selalu dihitung ulang dari kumulatif
+// (debit - kredit) berurutan berdasarkan tanggal, supaya tetap akurat
+// walau ada data yang diedit/dihapus/disisipkan di tengah.
+// ============================================================
+router.get('/keuangan', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('buku_kas')
+      .select('*')
+      .order('tanggal', { ascending: true })
+      .order('id', { ascending: true });
+    if (error) return res.status(500).json({ message: error.message });
+
+    // Hitung saldo berjalan dari yang paling lama ke yang terbaru
+    let saldo = 0;
+    const hasil = (data || []).map(row => {
+      saldo += Number(row.debit || 0) - Number(row.kredit || 0);
+      return { ...row, saldo };
+    });
+
+    // Balikin urutan: yang terbaru tampil paling atas (lebih enak dibaca di UI)
+    res.json(hasil.reverse());
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+router.post('/keuangan', verifyAdmin, async (req, res) => {
+  try {
+    const { tanggal, debit, kredit, catatan } = req.body;
+    if (!tanggal) return res.status(400).json({ message: 'Tanggal wajib diisi' });
+    if (!Number(debit) && !Number(kredit)) return res.status(400).json({ message: 'Isi debit atau kredit' });
+
+    const { data, error } = await supabase.from('buku_kas').insert([{
+      tanggal,
+      debit: Number(debit) || 0,
+      kredit: Number(kredit) || 0,
+      catatan: catatan || ''
+    }]).select().single();
+    if (error) return res.status(500).json({ message: error.message });
+
+    res.json({ message: 'Catatan keuangan berhasil ditambahkan', data });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+router.put('/keuangan/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { tanggal, debit, kredit, catatan } = req.body;
+    if (!tanggal) return res.status(400).json({ message: 'Tanggal wajib diisi' });
+
+    const { error } = await supabase.from('buku_kas').update({
+      tanggal,
+      debit: Number(debit) || 0,
+      kredit: Number(kredit) || 0,
+      catatan: catatan || ''
+    }).eq('id', req.params.id);
+    if (error) return res.status(500).json({ message: error.message });
+
+    res.json({ message: 'Berhasil diupdate' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+router.delete('/keuangan/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('buku_kas').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: 'Berhasil dihapus' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.kirimPengingatSemua = kirimPengingatSemua;
