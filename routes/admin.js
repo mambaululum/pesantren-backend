@@ -799,6 +799,7 @@ const buatPesanKwitansiLengkap = ({ u, tanggal_bayar, metode_bayar, rincianItems
     (kelebihan > 0 ? `🎉 Kelebihan/Uang Jajan : *Rp ${formatRp(kelebihan)}*\n` : '') +
     (keterangan ? `📝 Ket: ${keterangan}\n` : '') +
     `━━━━━━━━━━━━━━━━━━\n` +
+    `Jika ada tagihan yang belum lunas silahkan membayar ke bendahara pondok atau transfer ke rekening berikut.\n` +
     `🏦 *${REKENING_PONDOK.bank}*\n` +
     `📋 No. Rek : *${REKENING_PONDOK.no_rek}*\n` +
     `👤 A.N     : *${REKENING_PONDOK.atas_nama}*\n` +
