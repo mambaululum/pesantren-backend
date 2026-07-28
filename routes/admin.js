@@ -842,7 +842,9 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               total: jumlah_bayar,
               metode: '-',
               statusLabel: 'LUNAS',
-              catatan: kelebihan > 0 ? `Sisa uang: Rp ${formatRp(kelebihan)}` : (keterangan || '')
+              catatan: kelebihan > 0
+                ? `Sisa uang: Rp ${formatRp(kelebihan)}${keterangan ? ' - ' + keterangan : ''}`
+                : (keterangan || '')
             });
             imageUrl = await uploadKwitansiJPG(jpgBuffer, `kwitansi_${u.nama_siswa}`);
           } catch (e) { console.log('Gagal generate JPG kwitansi:', e.message); }
