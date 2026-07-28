@@ -816,7 +816,8 @@ const buatPesanKwitansiLengkap = ({ u, tanggal_bayar, metode_bayar, rincianItems
 // ============================================================
 router.post('/pembayaran', verifyAdmin, async (req, res) => {
   try {
-    const { tagihan_id, jumlah_bayar, tanggal_bayar, keterangan, kirim_notif } = req.body;
+    const { tagihan_id, jumlah_bayar, tanggal_bayar, keterangan, kirim_notif, kelebihan: kelebihanInput } = req.body;
+    const kelebihan = Math.round(Number(kelebihanInput) || 0);
 
     await supabase.from('pembayaran').insert([{ tagihan_id, jumlah_bayar, tanggal_bayar, keterangan: keterangan || '' }]);
 
@@ -840,7 +841,8 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               items: [{ label: t.jenis, jumlah: jumlah_bayar }],
               total: jumlah_bayar,
               metode: '-',
-              statusLabel: 'LUNAS'
+              statusLabel: 'LUNAS',
+              catatan: kelebihan > 0 ? `Sisa uang: Rp ${formatRp(kelebihan)}` : (keterangan || '')
             });
             imageUrl = await uploadKwitansiJPG(jpgBuffer, `kwitansi_${u.nama_siswa}`);
           } catch (e) { console.log('Gagal generate JPG kwitansi:', e.message); }
@@ -848,7 +850,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
           const pesan = buatPesanKwitansiLengkap({
             u, tanggal_bayar, metode_bayar: 'tunai',
             rincianItems: [`• ${t.jenis} : *Rp ${formatRp(jumlah_bayar)}* ✅ Lunas`],
-            jumlahTotal: jumlah_bayar, keterangan
+            jumlahTotal: jumlah_bayar, keterangan, kelebihan
           });
           await kirimWAKwitansi(u.no_hp, pesan, imageUrl, { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa });
         }
@@ -857,9 +859,9 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
     await simpanNotifikasi(
       t.user_id,
       '✅ Pembayaran Berhasil',
-      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Status: Lunas 🎉`,
+      `Pembayaran ${t.jenis} sebesar Rp ${formatRp(jumlah_bayar)} telah diterima. Status: Lunas 🎉${kelebihan > 0 ? ` Kelebihan Rp ${formatRp(kelebihan)}.` : ''}`,
       'bayar',
-      { jenis: t.jenis, jumlah: t.jumlah, jumlah_bayar, sisa: 0, tanggal_bayar }
+      { jenis: t.jenis, jumlah: t.jumlah, jumlah_bayar, sisa: 0, kelebihan, tanggal_bayar }
     );
       res.json({ message: 'Pembayaran berhasil, tagihan LUNAS!', lunas: true });
 
