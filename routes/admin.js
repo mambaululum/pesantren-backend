@@ -420,10 +420,27 @@ router.post('/login', async (req, res) => {
     if (error || !data) return res.status(401).json({ message: 'Username tidak ditemukan' });
     const valid = await bcrypt.compare(password, data.password);
     if (!valid) return res.status(401).json({ message: 'Password salah' });
-    const token = jwt.sign({ id: data.id, isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    // Token berlaku 30 hari. Selama admin membuka aplikasi minimal sekali dalam rentang
+    // ini, endpoint /refresh-token di bawah akan menerbitkan token baru secara otomatis
+    // (sliding session) sehingga admin tidak perlu login ulang walau tidak pernah logout.
+    const token = jwt.sign({ id: data.id, isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, admin: { id: data.id, nama: data.nama } });
   } catch (err) {
     console.error('Admin login error:', err.message);
+    res.status(500).json({ message: 'Server error', detail: err.message });
+  }
+});
+
+// Perpanjang sesi: dipanggil otomatis oleh frontend setiap kali aplikasi dibuka.
+// Hanya berhasil kalau token LAMA masih valid (belum lewat 30 hari) — begitu berhasil,
+// token BARU diterbitkan dengan masa berlaku 30 hari lagi dihitung dari sekarang.
+router.post('/refresh-token', verifyAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('admins').select('id, nama').eq('id', req.adminId).single();
+    if (error || !data) return res.status(401).json({ message: 'Akun admin tidak ditemukan' });
+    const token = jwt.sign({ id: data.id, isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, admin: { id: data.id, nama: data.nama } });
+  } catch (err) {
     res.status(500).json({ message: 'Server error', detail: err.message });
   }
 });
