@@ -2529,7 +2529,9 @@ router.post('/santri/:id/foto', verifyAdmin, async (req, res) => {
       .from('foto-santri')
       .getPublicUrl(fileName);
 
-    const foto_url = data.publicUrl;
+    // Tambahkan timestamp supaya URL berubah tiap upload -> browser/CDN tidak
+    // menyajikan foto lama dari cache walau nama file & isi storage sama.
+    const foto_url = `${data.publicUrl}?t=${Date.now()}`;
 
     // Simpan URL ke tabel users
     await supabase.from('users').update({ foto_url }).eq('id', req.params.id);
