@@ -1156,15 +1156,24 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
 router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
   try {
     const {
-      user_id, items = [], item_lain,
+      user_id, items = [], item_lain, items_lain, setoran_tabungan,
       tanggal_bayar, keterangan, metode_bayar, kirim_notif
     } = req.body;
 
     if (!user_id) return res.status(400).json({ message: 'Santri wajib dipilih' });
     const itemsValid = (items || []).filter(it => it && it.tagihan_id && Number(it.jumlah_bayar) > 0);
-    const adaItemLain = item_lain && Number(item_lain.jumlah) > 0;
-    if (itemsValid.length === 0 && !adaItemLain) {
-      return res.status(400).json({ message: 'Pilih minimal 1 tagihan atau isi item non-tagihan dengan nominal > 0' });
+
+    // items_lain: array dinamis (boleh berapapun). Tetap terima `item_lain` (objek tunggal)
+    // untuk kompatibilitas dengan client lama yang belum update.
+    const sumberItemsLain = Array.isArray(items_lain) && items_lain.length > 0
+      ? items_lain
+      : (item_lain ? [item_lain] : []);
+    const itemsLainValid = sumberItemsLain.filter(it => it && Number(it.jumlah) > 0);
+
+    const adaSetoranTabungan = setoran_tabungan && Number(setoran_tabungan.jumlah) > 0;
+
+    if (itemsValid.length === 0 && itemsLainValid.length === 0 && !adaSetoranTabungan) {
+      return res.status(400).json({ message: 'Pilih minimal 1 tagihan, isi item non-tagihan, atau isi setoran tabungan dengan nominal > 0' });
     }
 
     const { data: u } = await supabase.from('users').select('nama, nama_siswa, no_hp').eq('id', user_id).single();
@@ -1203,22 +1212,31 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
       }
     }
 
-    // Item non-tagihan (kalau ada)
-    let itemLainSimpan = null;
-    if (adaItemLain) {
-      itemLainSimpan = { keperluan: item_lain.keperluan || 'Pembayaran lain', jumlah: Math.round(Number(item_lain.jumlah)) };
+    // Item non-tagihan (kalau ada, bisa lebih dari satu)
+    const itemsLainSimpan = [];
+    for (const it of itemsLainValid) {
+      const itemSimpan = { keperluan: it.keperluan || 'Pembayaran lain', jumlah: Math.round(Number(it.jumlah)) };
+      itemsLainSimpan.push(itemSimpan);
       await supabase.from('pembayaran_umum').insert([{
         nama_pembayar: u.nama || u.nama_siswa,
-        keperluan: itemLainSimpan.keperluan,
-        jumlah: itemLainSimpan.jumlah,
+        keperluan: itemSimpan.keperluan,
+        jumlah: itemSimpan.jumlah,
         tanggal: tanggal_bayar,
         keterangan: keterangan || '',
         kategori: 'umum',
         no_hp: u.no_hp || ''
       }]);
     }
+    const jumlahItemsLain = itemsLainSimpan.reduce((a, it) => a + it.jumlah, 0);
+    // Dipakai di pesan/JPG kwitansi supaya kode di bawah tidak perlu diubah banyak
+    const itemLainSimpan = itemsLainSimpan.length === 1 ? itemsLainSimpan[0] : null;
 
-    const jumlahTotal = jumlahTagihanTerbayar + (itemLainSimpan?.jumlah || 0);
+    // Setoran tabungan — HANYA disebut di kwitansi/pesan WA, TIDAK disimpan ke tabel manapun
+    const tabunganSimpan = adaSetoranTabungan
+      ? { jumlah: Math.round(Number(setoran_tabungan.jumlah)) }
+      : null;
+
+    const jumlahTotal = jumlahTagihanTerbayar + jumlahItemsLain + (tabunganSimpan?.jumlah || 0);
     if (jumlahTotal <= 0) return res.status(400).json({ message: 'Tidak ada nominal pembayaran yang valid' });
 
     const rekap = await getRekapTagihanSantri(user_id);
@@ -1227,21 +1245,23 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
     const rincianList = [
       ...lunasList.map(t => `${t.jenis}: Rp ${formatRp(t.dibayar)} (lunas)`),
       ...cicilanList.map(t => `${t.jenis}: Rp ${formatRp(t.dibayar)} (cicilan, sisa Rp ${formatRp(t.sisa)})`),
-      ...(itemLainSimpan ? [`${itemLainSimpan.keperluan}: Rp ${formatRp(itemLainSimpan.jumlah)}`] : [])
+      ...itemsLainSimpan.map(it => `${it.keperluan}: Rp ${formatRp(it.jumlah)}`),
+      ...(tabunganSimpan ? [`Titip Tabungan: Rp ${formatRp(tabunganSimpan.jumlah)}`] : [])
     ];
     await simpanNotifikasi(
       user_id,
       '✅ Pembayaran Berhasil',
       `Setoran Rp ${formatRp(jumlahTotal)} diterima. ${rincianList.join(', ')}`,
       'bayar',
-      { lunasList, cicilanList, itemLainSimpan, jumlah_total: jumlahTotal, tanggal_bayar }
+      { lunasList, cicilanList, itemsLainSimpan, tabunganSimpan, jumlah_total: jumlahTotal, tanggal_bayar }
     );
 
     res.json({
       message: 'Pembayaran berhasil disimpan',
       lunas: lunasList.length,
       cicilan: cicilanList.length,
-      item_lain: itemLainSimpan,
+      items_lain: itemsLainSimpan,
+      tabungan: tabunganSimpan,
       total_kekurangan: rekap.totalKekurangan
     });
 
@@ -1250,7 +1270,8 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
       const rincianItemsWA = [
         ...lunasList.map(t => `• ${t.jenis} : *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
         ...cicilanList.map(t => `• ${t.jenis} : *Rp ${formatRp(t.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(t.sisa)})`),
-        ...(itemLainSimpan ? [`• ${itemLainSimpan.keperluan} : *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)`] : [])
+        ...itemsLainSimpan.map(it => `• ${it.keperluan} : *Rp ${formatRp(it.jumlah)}* (non-tagihan)`),
+        ...(tabunganSimpan ? [`• Titip Tabungan : *Rp ${formatRp(tabunganSimpan.jumlah)}*`] : [])
       ];
 
       let imageUrl = null;
@@ -1258,7 +1279,8 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
         const itemsJPG = [
           ...lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar })),
           ...cicilanList.map(t => ({ label: `${t.jenis} (cicilan)`, jumlah: t.dibayar })),
-          ...(itemLainSimpan ? [{ label: `${itemLainSimpan.keperluan} (non-tagihan)`, jumlah: itemLainSimpan.jumlah }] : [])
+          ...itemsLainSimpan.map(it => ({ label: `${it.keperluan} (non-tagihan)`, jumlah: it.jumlah })),
+          ...(tabunganSimpan ? [{ label: 'Titip Tabungan', jumlah: tabunganSimpan.jumlah }] : [])
         ];
         const jpgBuffer = await buatKwitansiJPG({
           noKwitansi: buatNoKwitansi('FLX', user_id),
