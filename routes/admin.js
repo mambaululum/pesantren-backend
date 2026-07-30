@@ -1361,6 +1361,32 @@ router.put('/pembayaran/:id', verifyAdmin, async (req, res) => {
 
 
 
+// Ubah nama semester (mis. "Semester 1 2026/2027") jadi angka yang bisa diurutkan
+// secara kronologis. Format yang dikenali: "Semester <1|2> <YYYY>/<YYYY>".
+// Kalau tidak cocok format itu, balikin null (dianggap tidak bisa diurutkan kronologis,
+// akan di-fallback ke urutan alfabetis / ditaruh di akhir).
+function semesterSortValue(nama) {
+  if (!nama) return null;
+  const m = nama.match(/semester\s*(\d+)\s*(\d{4})\s*\/\s*(\d{4})/i);
+  if (!m) return null;
+  const semNum = parseInt(m[1], 10);
+  const startYear = parseInt(m[2], 10);
+  // startYear*10 + semNum -> "Semester 1 2026/2027" (20261) > "Semester 2 2025/2026" (20252)
+  return startYear * 10 + semNum;
+}
+
+// Bandingkan dua nama semester untuk urutan ASCENDING (lama -> baru).
+// Semester dengan format dikenali selalu didahulukan dan diurutkan kronologis;
+// yang tidak dikenali di-fallback ke perbandingan string dan ditaruh di akhir.
+function compareSemesterAsc(a, b) {
+  const va = semesterSortValue(a);
+  const vb = semesterSortValue(b);
+  if (va !== null && vb !== null) return va - vb;
+  if (va !== null) return -1; // a dikenali, taruh duluan
+  if (vb !== null) return 1;  // b dikenali, taruh duluan
+  return String(a).localeCompare(String(b));
+}
+
 // ============================================================
 // ARSIP SNAPSHOT SEMESTER
 // ============================================================
@@ -1563,7 +1589,7 @@ router.get('/semester/daftar', verifyAdmin, async (req, res) => {
       .not('semester', 'is', null)
       .neq('semester', '');
     if (error) return res.status(500).json({ message: error.message });
-    const unik = [...new Set(data.map(r => r.semester))].sort();
+    const unik = [...new Set(data.map(r => r.semester))].sort(compareSemesterAsc);
     res.json(unik);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1596,7 +1622,7 @@ router.post('/semester', verifyAdmin, async (req, res) => {
         const { data: semuaSemester } = await supabase
           .from('tagihan').select('semester').not('semester', 'is', null).neq('semester', '');
         if (semuaSemester && semuaSemester.length > 0) {
-          const daftarUnik = [...new Set(semuaSemester.map(r => r.semester))].sort();
+          const daftarUnik = [...new Set(semuaSemester.map(r => r.semester))].sort(compareSemesterAsc);
           semesterReferensi = daftarUnik[daftarUnik.length - 1];
         }
       }
@@ -1787,7 +1813,7 @@ router.get('/semester', verifyAdmin, async (req, res) => {
       sem.jumlah_santri = sem.jumlah_santri.size;
     }
 
-    res.json(Object.values(map).sort((a, b) => b.semester.localeCompare(a.semester)));
+    res.json(Object.values(map).sort((a, b) => compareSemesterAsc(b.semester, a.semester)));
   } catch (err) {
     res.status(500).json({ message: 'Server error', detail: err.message });
   }
