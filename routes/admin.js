@@ -2443,6 +2443,46 @@ router.patch('/notifikasi/:id/baca', async (req, res) => {
   } catch { res.status(401).json({ message: 'Token tidak valid' }); }
 });
 
+// HAPUS notifikasi TERPILIH (bulk) — dipakai tombol "Hapus Pilihan" di
+// halaman pemberitahuan akun user. Body: { ids: [id1, id2, ...] }.
+// HARUS didefinisikan di atas /notifikasi/:id agar path 'hapus-pilihan'
+// tidak ketimpa jadi parameter :id (pola sama seperti baca-semua di atas).
+router.delete('/notifikasi/hapus-pilihan', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Pilih minimal 1 notifikasi untuk dihapus' });
+    }
+    // .eq('user_id', ...) memastikan user cuma bisa hapus notifikasi miliknya sendiri
+    const { error, count } = await supabase
+      .from('notifikasi')
+      .delete({ count: 'exact' })
+      .in('id', ids)
+      .eq('user_id', decoded.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: `${count ?? ids.length} notifikasi berhasil dihapus`, dihapus: count ?? ids.length });
+  } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
+
+// HAPUS SATU notifikasi (dipakai tombol hapus per-item, kalau dibutuhkan)
+router.delete('/notifikasi/:id', async (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token diperlukan' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { error } = await supabase
+      .from('notifikasi')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', decoded.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ message: 'Notifikasi dihapus' });
+  } catch { res.status(401).json({ message: 'Token tidak valid' }); }
+});
+
 router.get('/notifikasi', async (req, res) => {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(403).json({ message: 'Token diperlukan' });
