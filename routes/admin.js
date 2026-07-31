@@ -747,6 +747,11 @@ const getIndeksBulan = (jenisText) => {
   return idx === -1 ? null : idx;
 };
 
+// Gabungkan nama jenis tagihan dengan keterangan semesternya, dipakai di
+// kwitansi (pesan WA & JPG) supaya wali santri tahu tagihan itu untuk
+// semester yang mana. Kalau tagihan tidak punya semester, balikin jenis apa adanya.
+const labelDenganSemester = (jenis, semester) => semester ? `${jenis} [${semester}]` : jenis;
+
 // ============================================================
 // HELPER: rekap lengkap tagihan santri — total tagihan keseluruhan,
 // total kekurangan, dan daftar tagihan yang masih belum lunas
@@ -839,7 +844,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 
     await supabase.from('pembayaran').insert([{ tagihan_id, jumlah_bayar, tanggal_bayar, keterangan: keterangan || '' }]);
 
-    const { data: t } = await supabase.from('tagihan').select('jumlah, jenis, user_id').eq('id', tagihan_id).single();
+    const { data: t } = await supabase.from('tagihan').select('jumlah, jenis, user_id, semester').eq('id', tagihan_id).single();
     const { data: bayarList } = await supabase.from('pembayaran').select('jumlah_bayar').eq('tagihan_id', tagihan_id);
     const total_bayar = bayarList ? bayarList.reduce((a, p) => a + Number(p.jumlah_bayar), 0) : 0;
     const sisa = Math.round(Number(t.jumlah) - total_bayar);
@@ -856,7 +861,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
               namaWali: u.nama,
               namaSantri: u.nama_siswa,
               tanggal: tanggal_bayar,
-              items: [{ label: t.jenis, jumlah: jumlah_bayar }],
+              items: [{ label: labelDenganSemester(t.jenis, t.semester), jumlah: jumlah_bayar }],
               total: jumlah_bayar,
               metode: '-',
               statusLabel: 'LUNAS',
@@ -869,7 +874,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
 
           const pesan = buatPesanKwitansiLengkap({
             u, tanggal_bayar, metode_bayar: 'tunai',
-            rincianItems: [`• ${t.jenis} : *Rp ${formatRp(jumlah_bayar)}* ✅ Lunas`],
+            rincianItems: [`• ${labelDenganSemester(t.jenis, t.semester)} : *Rp ${formatRp(jumlah_bayar)}* ✅ Lunas`],
             jumlahTotal: jumlah_bayar, keterangan, kelebihan
           });
           await kirimWAKwitansi(u.no_hp, pesan, imageUrl, { jenis: 'kwitansi', nama_wali: u.nama, nama_siswa: u.nama_siswa });
@@ -891,7 +896,7 @@ router.post('/pembayaran', verifyAdmin, async (req, res) => {
         if (u && u.no_hp && kirim_notif !== false) {
           const pesan = buatPesanKwitansiLengkap({
             u, tanggal_bayar, metode_bayar: 'tunai',
-            rincianItems: [`• ${t.jenis.trim()} : *Rp ${formatRp(jumlah_bayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(sisa)})`],
+            rincianItems: [`• ${labelDenganSemester(t.jenis.trim(), t.semester)} : *Rp ${formatRp(jumlah_bayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(sisa)})`],
             jumlahTotal: jumlah_bayar, keterangan
           });
           await kirimWAKwitansi(u.no_hp, pesan, null, { jenis: 'cicilan', nama_wali: u.nama, nama_siswa: u.nama_siswa });
@@ -946,11 +951,11 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
         sisaUang -= t.sisa;
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
-        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah });
+        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah, semester: t.semester });
       } else {
         // Cicilan
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
-        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang };
+        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang, semester: t.semester };
         sisaUang = 0;
       }
     }
@@ -992,14 +997,14 @@ if (lunasList.length > 0 && cicilanItem) {
     // Kirim SATU pesan WA kwitansi saja (tidak ada WA konfirmasi terpisah)
     if (kirim_notif !== false && u.no_hp && lunasList.length > 0) {
       const rincianItemsWA = [
-        ...lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
-        ...(cicilanItem ? [`• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(cicilanItem.sisa)})`] : [])
+        ...lunasList.map(t => `• ${labelDenganSemester(t.jenis, t.semester)}: *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
+        ...(cicilanItem ? [`• ${labelDenganSemester(cicilanItem.jenis, cicilanItem.semester)}: *Rp ${formatRp(cicilanItem.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(cicilanItem.sisa)})`] : [])
       ];
 
       let imageUrl = null;
       try {
-        const itemsJPG = lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar }));
-        if (cicilanItem) itemsJPG.push({ label: `${cicilanItem.jenis} (cicilan)`, jumlah: cicilanItem.dibayar });
+        const itemsJPG = lunasList.map(t => ({ label: labelDenganSemester(t.jenis, t.semester), jumlah: t.dibayar }));
+        if (cicilanItem) itemsJPG.push({ label: labelDenganSemester(`${cicilanItem.jenis} (cicilan)`, cicilanItem.semester), jumlah: cicilanItem.dibayar });
         const jpgBuffer = await buatKwitansiJPG({
           noKwitansi: buatNoKwitansi('BLK', user_id),
           namaWali: u.nama,
@@ -1073,10 +1078,10 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
         sisaUang -= t.sisa;
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
-        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah });
+        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah, semester: t.semester });
       } else {
         await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
-        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang };
+        cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang, semester: t.semester };
         sisaUang = 0;
       }
     }
@@ -1123,15 +1128,15 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
     // Kirim SATU pesan WA kwitansi saja (tidak ada WA konfirmasi terpisah)
     if (kirim_notif !== false && u.no_hp && (lunasList.length > 0 || itemLainSimpan)) {
       const rincianItemsWA = [
-        ...lunasList.map(t => `• ${t.jenis}: *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
-        ...(cicilanItem ? [`• ${cicilanItem.jenis}: *Rp ${formatRp(cicilanItem.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(cicilanItem.sisa)})`] : []),
+        ...lunasList.map(t => `• ${labelDenganSemester(t.jenis, t.semester)}: *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
+        ...(cicilanItem ? [`• ${labelDenganSemester(cicilanItem.jenis, cicilanItem.semester)}: *Rp ${formatRp(cicilanItem.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(cicilanItem.sisa)})`] : []),
         ...(itemLainSimpan ? [`• ${itemLainSimpan.keperluan}: *Rp ${formatRp(itemLainSimpan.jumlah)}* (non-tagihan)`] : [])
       ];
 
       let imageUrl = null;
       try {
-        const itemsJPG = lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar }));
-        if (cicilanItem) itemsJPG.push({ label: `${cicilanItem.jenis} (cicilan)`, jumlah: cicilanItem.dibayar });
+        const itemsJPG = lunasList.map(t => ({ label: labelDenganSemester(t.jenis, t.semester), jumlah: t.dibayar }));
+        if (cicilanItem) itemsJPG.push({ label: labelDenganSemester(`${cicilanItem.jenis} (cicilan)`, cicilanItem.semester), jumlah: cicilanItem.dibayar });
         if (itemLainSimpan) itemsJPG.push({ label: `${itemLainSimpan.keperluan} (non-tagihan)`, jumlah: itemLainSimpan.jumlah });
         const jpgBuffer = await buatKwitansiJPG({
           noKwitansi: buatNoKwitansi('CMP', user_id),
@@ -1223,9 +1228,9 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
       jumlahTagihanTerbayar += bayarInput;
       if (bayarInput >= t.sisa) {
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
-        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: bayarInput, sudah: t.sudah });
+        lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: bayarInput, sudah: t.sudah, semester: t.semester });
       } else {
-        cicilanList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: bayarInput, sisa: t.sisa - bayarInput, sudah: t.sudah + bayarInput });
+        cicilanList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: bayarInput, sisa: t.sisa - bayarInput, sudah: t.sudah + bayarInput, semester: t.semester });
       }
     }
 
@@ -1285,8 +1290,8 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
     // Kirim SATU pesan WA kwitansi lengkap (rincian + total tagihan + daftar belum lunas + arahan transfer + doa)
     if (kirim_notif !== false && u.no_hp) {
       const rincianItemsWA = [
-        ...lunasList.map(t => `• ${t.jenis} : *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
-        ...cicilanList.map(t => `• ${t.jenis} : *Rp ${formatRp(t.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(t.sisa)})`),
+        ...lunasList.map(t => `• ${labelDenganSemester(t.jenis, t.semester)} : *Rp ${formatRp(t.dibayar)}* ✅ Lunas`),
+        ...cicilanList.map(t => `• ${labelDenganSemester(t.jenis, t.semester)} : *Rp ${formatRp(t.dibayar)}* (Cicilan, sisa tagihan ini Rp ${formatRp(t.sisa)})`),
         ...itemsLainSimpan.map(it => `• ${it.keperluan} : *Rp ${formatRp(it.jumlah)}* (non-tagihan)`),
         ...(tabunganSimpan ? [`• Titip Tabungan : *Rp ${formatRp(tabunganSimpan.jumlah)}*`] : [])
       ];
@@ -1294,8 +1299,8 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
       let imageUrl = null;
       try {
         const itemsJPG = [
-          ...lunasList.map(t => ({ label: t.jenis, jumlah: t.dibayar })),
-          ...cicilanList.map(t => ({ label: `${t.jenis} (cicilan)`, jumlah: t.dibayar })),
+          ...lunasList.map(t => ({ label: labelDenganSemester(t.jenis, t.semester), jumlah: t.dibayar })),
+          ...cicilanList.map(t => ({ label: labelDenganSemester(`${t.jenis} (cicilan)`, t.semester), jumlah: t.dibayar })),
           ...itemsLainSimpan.map(it => ({ label: `${it.keperluan} (non-tagihan)`, jumlah: it.jumlah })),
           ...(tabunganSimpan ? [{ label: 'Titip Tabungan', jumlah: tabunganSimpan.jumlah }] : [])
         ];
@@ -1834,20 +1839,49 @@ const buatRincianPengingat = (tagihanList) => {
   const items = (tagihanList || []).map(t => {
     const sudah = (t.pembayaran || []).reduce((a, p) => a + Number(p.jumlah_bayar), 0);
     const sisa = Math.round(Number(t.jumlah) - sudah);
-    return { jenis: t.jenis, jumlah: t.jumlah, sudah, sisa };
+    return { jenis: t.jenis, jumlah: t.jumlah, sudah, sisa, semester: t.semester || '-' };
   });
-  items.sort((a, b) => {
-    const bulanA = getIndeksBulan(a.jenis);
-    const bulanB = getIndeksBulan(b.jenis);
-    if (bulanA !== null && bulanB !== null) return bulanA - bulanB;
-    if (bulanA !== null) return -1;
-    if (bulanB !== null) return 1;
-    return b.sisa - a.sisa;
-  });
-  return items.map(t => t.sudah > 0
+
+  // Urutan dalam satu semester: bulanan dulu (urut bulan tahun ajaran),
+  // baru non-bulanan (urut nominal sisa terbesar) — sama seperti sebelumnya.
+  const urutkanDalamSemester = (list) => {
+    list.sort((a, b) => {
+      const bulanA = getIndeksBulan(a.jenis);
+      const bulanB = getIndeksBulan(b.jenis);
+      if (bulanA !== null && bulanB !== null) return bulanA - bulanB;
+      if (bulanA !== null) return -1;
+      if (bulanB !== null) return 1;
+      return b.sisa - a.sisa;
+    });
+    return list;
+  };
+
+  const baris = (t) => t.sudah > 0
     ? `• ${t.jenis}\n  Sisa: *Rp ${formatRp(t.sisa)}*`
-    : `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`
-  ).join('\n');
+    : `• ${t.jenis}: *Rp ${formatRp(t.jumlah)}*`;
+
+  // Kelompokkan per semester
+  const perSemester = {};
+  for (const t of items) {
+    if (!perSemester[t.semester]) perSemester[t.semester] = [];
+    perSemester[t.semester].push(t);
+  }
+
+  // Urutkan nama semester dari yang TERBARU dulu (kebalikan compareSemesterAsc),
+  // semester tanpa keterangan ("-") ditaruh paling akhir.
+  const namaSemester = Object.keys(perSemester).sort((a, b) => {
+    if (a === '-' && b === '-') return 0;
+    if (a === '-') return 1;
+    if (b === '-') return -1;
+    return compareSemesterAsc(b, a); // dibalik -> terbaru duluan
+  });
+
+  return namaSemester.map(nama => {
+    const list = urutkanDalamSemester(perSemester[nama]);
+    const rincianList = list.map(baris).join('\n');
+    const judul = nama === '-' ? '📚 *Lainnya*' : `📚 *${nama}*`;
+    return `${judul}\n${rincianList}`;
+  }).join('\n\n');
 };
 
 const kirimPengingatSemua = async () => {
@@ -1857,7 +1891,7 @@ const kirimPengingatSemua = async () => {
     const sisa = await getTotalKekurangan(u.id);
     if (sisa <= 0) continue;
     try {
-      const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
+      const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, semester, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
       const rincian = buatRincianPengingat(tagihan);
 
       await kirimWA(u.no_hp,
@@ -1925,7 +1959,7 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
     const sisa = await getTotalKekurangan(u.id);
     if (sisa <= 0) return res.status(400).json({ message: 'Santri tidak punya tunggakan' });
 
-    const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
+    const { data: tagihan } = await supabase.from('tagihan').select('jenis, jumlah, semester, pembayaran(jumlah_bayar)').eq('user_id', u.id).eq('status', 'belum');
     const rincian = buatRincianPengingat(tagihan);
 
     await kirimWA(u.no_hp,
