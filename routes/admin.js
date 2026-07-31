@@ -50,6 +50,27 @@ const kirimPushNotif = async (user_id, judul, pesan) => {
 const formatRp = (n) => Math.round(Number(n)).toLocaleString('id-ID');
 
 // ============================================================
+// HELPER FORMAT TANGGAL — TANGGAL dulu, baru BULAN, baru TAHUN
+// (mis. "31 Juli 2026"), dipakai di semua pesan WA & gambar kwitansi
+// supaya tidak lagi tampil format ISO "YYYY-MM-DD" (tahun duluan).
+// ============================================================
+const NAMA_BULAN_INDO = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+const formatTanggalIndo = (input) => {
+  if (!input) return '-';
+  // Ambil bagian YYYY-MM-DD dari string (buang jam kalau ada), supaya tidak
+  // kena pergeseran zona waktu saat di-parse jadi objek Date.
+  const cocok = String(input).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!cocok) return String(input); // bukan format ISO -> tampilkan apa adanya
+  const [, tahun, bulan, tanggal] = cocok;
+  const namaBulan = NAMA_BULAN_INDO[parseInt(bulan, 10) - 1];
+  if (!namaBulan) return String(input);
+  return `${parseInt(tanggal, 10)} ${namaBulan} ${tahun}`;
+};
+
+// ============================================================
 // FUNGSI KIRIM WHATSAPP via FONNTE
 // ============================================================
 const formatNomor = (nomor) => {
@@ -263,7 +284,7 @@ const buatKwitansiJPG = async ({ noKwitansi, namaWali, namaSantri, tanggal, item
     <text x="60" y="270" font-size="18" fill="#333">Nama Santri</text>
     <text x="220" y="270" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(namaSantri)}</text>
     <text x="60" y="300" font-size="18" fill="#333">Tanggal Bayar</text>
-    <text x="220" y="300" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(tanggal)}</text>
+    <text x="220" y="300" font-size="18" fill="#111" font-weight="bold">: ${escapeXml(formatTanggalIndo(tanggal))}</text>
 
     <line x1="50" y1="315" x2="750" y2="315" stroke="#ccc" stroke-width="1"/>
     ${barisSvg}
@@ -666,7 +687,7 @@ router.put('/tagihan/:id', verifyAdmin, async (req, res) => {
             `Santri  : *${u.nama_siswa}*\n` +
             `Tagihan : *${jenis}*\n` +
             `Jumlah  : *Rp ${formatRp(jumlah)}*\n` +
-            `Tanggal : ${tanggal_bayar || '-'}\n` +
+            `Tanggal : ${formatTanggalIndo(tanggal_bayar)}\n` +
             `Status  : ✅ *LUNAS*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `🏦 *${REKENING_PONDOK.bank}*\n` +
@@ -813,7 +834,7 @@ const buatPesanKwitansiLengkap = ({ u, tanggal_bayar, metode_bayar, rincianItems
     `Assalamu'alaikum Bapak/Ibu *${u.nama}*,\n\n` +
     `Berikut kwitansi pembayaran santri:\n\n` +
     `👤 Nama Santri    : *${u.nama_siswa}*\n` +
-    `📅 Tanggal Bayar  : ${tanggal_bayar}\n` +
+    `📅 Tanggal Bayar  : ${formatTanggalIndo(tanggal_bayar)}\n` +
     `💳 Metode         : *${metode_bayar === 'transfer' ? 'Transfer Bank' : 'Tunai'}*\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `📋 *Rincian Pembayaran Hari Ini:*\n${rincianItems.join('\n')}\n` +
@@ -2093,7 +2114,7 @@ router.get('/verify', (req, res) => {
       ${valid ? `<table>
         <tr><td class="label">No. Kwitansi</td><td class="val">${escapeXml(no || '-')}</td></tr>
         <tr><td class="label">Nama Santri</td><td class="val">${escapeXml(s || '-')}</td></tr>
-        <tr><td class="label">Tanggal Bayar</td><td class="val">${escapeXml(d || '-')}</td></tr>
+        <tr><td class="label">Tanggal Bayar</td><td class="val">${escapeXml(formatTanggalIndo(d))}</td></tr>
         <tr><td class="label">Jumlah</td><td class="val">Rp ${formatRp(t || 0)}</td></tr>
       </table>` : ''}
     </div></body></html>`;
@@ -2359,7 +2380,7 @@ router.post('/pembayaran-umum', verifyAdmin, async (req, res) => {
           `👤 Nama       : *${nama_pembayar}*\n` +
           `📋 Keperluan  : *${keperluan}*\n` +
           `💰 Jumlah     : *Rp ${formatRp(jumlah)}*\n` +
-          `📅 Tanggal    : ${tanggal}\n` +
+          `📅 Tanggal    : ${formatTanggalIndo(tanggal)}\n` +
           (keterangan ? `📝 Keterangan : ${keterangan}\n` : '') +
           `━━━━━━━━━━━━━━━━━━\n` +
           `Terima kasih 🙏\n` +
