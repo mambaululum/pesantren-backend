@@ -646,11 +646,11 @@ router.post('/tagihan', verifyAdmin, async (req, res) => {
             `⏳ Status           : Belum Dibayar\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `Mohon segera lakukan pembayaran ke bagian administrasi pondok atau transfer:\n\n` +
-            `🏦 *Bank BRI*\n` +
-            `📋 No. Rek : *6665 0101 4641 533*\n` +
-            `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+            `🏦 *${REKENING_PONDOK.bank}*\n` +
+            `📋 No. Rek : *${REKENING_PONDOK.no_rek}*\n` +
+            `👤 A.N     : *${REKENING_PONDOK.atas_nama}*\n\n` +
             `📱 Konfirmasi Pembayarasn:\n` +
-            `☎️ Hubungi : *081393695901*\n\n` +
+            `☎️ Hubungi : *${REKENING_PONDOK.kontak}*\n\n` +
             `Terima kasih 🙏\n\n` +
             `_PP. Muhammadiyah Mambaul Ulum_\n` +
             `_Mojo - Andong - Boyolali_`,
@@ -814,7 +814,7 @@ const getRekapTagihanSantri = async (uid) => {
 // Info rekening pondok untuk arahan transfer — satu tempat saja biar gampang diganti
 const REKENING_PONDOK = {
   bank: 'Bank BRI',
-  no_rek: '6665 0101 4641 533',
+  no_rek: '666501014641533', // tanpa spasi, biar gampang di-copy-paste wali santri
   atas_nama: 'ALFIAN AJI WIBOWO',
   kontak: '081393695901'
 };
@@ -1925,11 +1925,11 @@ const kirimPengingatSemua = async () => {
         `💰 Total Kekurangan: *Rp ${sisa.toLocaleString('id-ID')}*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
-        `🏦 *Bank BRI*\n` +
-        `📋 No. Rek : *6665 0101 4641 533*\n` +
-        `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+        `🏦 *${REKENING_PONDOK.bank}*\n` +
+        `📋 No. Rek : *${REKENING_PONDOK.no_rek}*\n` +
+        `👤 A.N     : *${REKENING_PONDOK.atas_nama}*\n\n` +
         `📱 Konfirmasi Pembayaran:\n` +
-        `☎️ Hubungi : *081393695901*\n\n` +
+        `☎️ Hubungi : *${REKENING_PONDOK.kontak}*\n\n` +
         `Terima kasih 🙏\n` +
         `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
         `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
@@ -1993,11 +1993,11 @@ router.post('/pengingat/kirim/:userId', verifyAdmin, async (req, res) => {
       `💰 Total Kekurangan: *Rp ${sisa.toLocaleString('id-ID')}*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `Mohon segera lunasi ke bagian administrasi atau transfer:\n\n` +
-      `🏦 *Bank BRI*\n` +
-      `📋 No. Rek : *6665 0101 4641 533*\n` +
-      `👤 A.N     : *ALFIAN AJI WIBOWO*\n\n` +
+      `🏦 *${REKENING_PONDOK.bank}*\n` +
+      `📋 No. Rek : *${REKENING_PONDOK.no_rek}*\n` +
+      `👤 A.N     : *${REKENING_PONDOK.atas_nama}*\n\n` +
       `📱 Konfirmasi Pembayaran:\n` +
-      `☎️ Hubungi : *081393695901*\n\n` +
+      `☎️ Hubungi : *${REKENING_PONDOK.kontak}*\n\n` +
       `Terima kasih 🙏\n` +
       `_Jazakumullah Khoiron, Semoga Allah memudahkan_\n` +
       `_dan melapangkan rizqi Bapak/Ibu_ Aamiin 🤲\n\n` +
