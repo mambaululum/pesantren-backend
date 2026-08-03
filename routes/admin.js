@@ -2178,9 +2178,15 @@ router.post('/resend-wa/:id', verifyAdmin, async (req, res) => {
 // ============================================================
 router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
   try {
-    const { bulan } = req.query; // format: "2026-07"
-    let dariISO = null, sampaiISO = null; // rentang UTC, dikonversi dari batas awal/akhir bulan WIB (UTC+7)
-    if (bulan && /^\d{4}-\d{2}$/.test(bulan)) {
+    const { bulan, dari, sampai } = req.query; // bulan: "2026-07", atau dari/sampai: "2026-07-15" (rentang tanggal bebas)
+    let dariISO = null, sampaiISO = null; // rentang UTC, dikonversi dari batas awal/akhir WIB (UTC+7)
+    if (dari && sampai && /^\d{4}-\d{2}-\d{2}$/.test(dari) && /^\d{4}-\d{2}-\d{2}$/.test(sampai)) {
+      // Rentang tanggal custom (dari - sampai), inklusif kedua ujungnya.
+      const [dy, dm, dd] = dari.split('-').map(Number);
+      const [sy, sm, sd] = sampai.split('-').map(Number);
+      dariISO = new Date(Date.UTC(dy, dm - 1, dd, -7, 0, 0)).toISOString();       // tgl dari jam 00:00 WIB
+      sampaiISO = new Date(Date.UTC(sy, sm - 1, sd + 1, -7, 0, 0)).toISOString(); // tgl sampai + 1 hari jam 00:00 WIB (exclusive)
+    } else if (bulan && /^\d{4}-\d{2}$/.test(bulan)) {
       const [y, m] = bulan.split('-').map(Number);
       dariISO = new Date(Date.UTC(y, m - 1, 1, -7, 0, 0)).toISOString();   // tgl 1 jam 00:00 WIB
       sampaiISO = new Date(Date.UTC(y, m, 1, -7, 0, 0)).toISOString();     // tgl 1 bulan berikutnya jam 00:00 WIB (exclusive)
