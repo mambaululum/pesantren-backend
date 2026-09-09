@@ -335,7 +335,10 @@ const uploadKwitansiJPG = async (buffer, namaFile) => {
       upsert: true
     });
     if (error) { console.log('Upload kwitansi JPG error:', error.message); return null; }
-    const { data } = supabase.storage.from('kwitansi').getPublicUrl(filePath);
+    // { download: '...' } menambahkan query ?download=... supaya saat link diklik dari
+    // browser/WA, filenya langsung terunduh (Content-Disposition: attachment), bukan
+    // cuma kebuka di tab baru.
+    const { data } = supabase.storage.from('kwitansi').getPublicUrl(filePath, { download: namaFile.replace(/[^a-zA-Z0-9_-]/g, '_') + '.jpg' });
     return data.publicUrl;
   } catch (e) {
     console.log('Upload kwitansi JPG exception:', e.message);
@@ -349,7 +352,7 @@ const kirimWAKwitansi = async (nomor, pesan, imageUrl, meta = {}) => {
   if (!process.env.FONNTE_TOKEN) { console.log('WA: FONNTE_TOKEN belum diisi di .env'); return; }
 
   const nomorFormatted = getNomorTujuan(nomor);
-  const pesanFinal = pesan + (imageUrl ? `\n\n🧾 Kwitansi (gambar):\n${imageUrl}` : '');
+  const pesanFinal = pesan + (imageUrl ? `\n\n🧾 Kwitansi (gambar):\n👉 Klik link di bawah untuk mengunduh kwitansi (gambar).\n${imageUrl}` : '');
   let status = 'terkirim';
   try {
     const formData = new FormData();
