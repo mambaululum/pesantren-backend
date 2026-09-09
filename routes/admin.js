@@ -2221,7 +2221,7 @@ router.get('/riwayat-pembayaran', verifyAdmin, async (req, res) => {
       const result = await Promise.all((pembayaran || []).map(async (p) => {
         const { data: t } = await supabase.from('tagihan').select('jenis, jumlah, user_id').eq('id', p.tagihan_id).single();
         const { data: u } = await supabase.from('users').select('nama, nama_siswa, kelas').eq('id', t?.user_id).single();
-        return { id: p.id, tanggal_bayar: p.tanggal_bayar, jumlah_bayar: p.jumlah_bayar, keterangan: p.keterangan, jenis_tagihan: t?.jenis, total_tagihan: t?.jumlah, nama_siswa: u?.nama_siswa, nama_wali: u?.nama, kelas: u?.kelas };
+        return { id: p.id, tanggal_bayar: p.tanggal_bayar, jumlah_bayar: p.jumlah_bayar, keterangan: p.keterangan, metode_bayar: p.metode_bayar, jenis_tagihan: t?.jenis, total_tagihan: t?.jumlah, nama_siswa: u?.nama_siswa, nama_wali: u?.nama, kelas: u?.kelas };
       }));
       return res.json(result);
     }
