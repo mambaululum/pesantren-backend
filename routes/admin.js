@@ -1267,17 +1267,31 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
         tanggal: tanggal_bayar,
         keterangan: keterangan || '',
         kategori: 'umum',
-        no_hp: u.no_hp || ''
+        no_hp: u.no_hp || '',
+        metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai'
       }]);
     }
     const jumlahItemsLain = itemsLainSimpan.reduce((a, it) => a + it.jumlah, 0);
     // Dipakai di pesan/JPG kwitansi supaya kode di bawah tidak perlu diubah banyak
     const itemLainSimpan = itemsLainSimpan.length === 1 ? itemsLainSimpan[0] : null;
 
-    // Setoran tabungan — HANYA disebut di kwitansi/pesan WA, TIDAK disimpan ke tabel manapun
+    // Setoran tabungan — sekarang DISIMPAN juga ke pembayaran_umum (kategori 'tabungan')
+    // supaya muncul di Riwayat Pembayaran & bisa direkap tunai/transfer, bukan cuma disebut di WA.
     const tabunganSimpan = adaSetoranTabungan
       ? { jumlah: Math.round(Number(setoran_tabungan.jumlah)) }
       : null;
+    if (tabunganSimpan) {
+      await supabase.from('pembayaran_umum').insert([{
+        nama_pembayar: u.nama || u.nama_siswa,
+        keperluan: 'Titip Tabungan',
+        jumlah: tabunganSimpan.jumlah,
+        tanggal: tanggal_bayar,
+        keterangan: setoran_tabungan.keterangan || keterangan || '',
+        kategori: 'tabungan',
+        no_hp: u.no_hp || '',
+        metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai'
+      }]);
+    }
 
     const jumlahTotal = jumlahTagihanTerbayar + jumlahItemsLain + (tabunganSimpan?.jumlah || 0);
     if (jumlahTotal <= 0) return res.status(400).json({ message: 'Tidak ada nominal pembayaran yang valid' });
@@ -2370,10 +2384,11 @@ router.get('/pembayaran-umum', verifyAdmin, async (req, res) => {
 
 router.post('/pembayaran-umum', verifyAdmin, async (req, res) => {
   try {
-    const { nama_pembayar, keperluan, jumlah, tanggal, keterangan, kategori, no_hp, kirim_notif } = req.body;
+    const { nama_pembayar, keperluan, jumlah, tanggal, keterangan, kategori, no_hp, kirim_notif, metode_bayar } = req.body;
     if (!nama_pembayar || !keperluan || !jumlah) return res.status(400).json({ message: 'Nama, keperluan, jumlah wajib diisi' });
     const { data, error } = await supabase.from('pembayaran_umum').insert([{
-      nama_pembayar, keperluan, jumlah: Number(jumlah), tanggal, keterangan, kategori: kategori || 'umum', no_hp: no_hp || ''
+      nama_pembayar, keperluan, jumlah: Number(jumlah), tanggal, keterangan, kategori: kategori || 'umum', no_hp: no_hp || '',
+      metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai'
     }]).select().single();
     if (error) return res.status(500).json({ message: error.message });
 
