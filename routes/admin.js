@@ -970,12 +970,12 @@ router.post('/pembayaran-bulk', verifyAdmin, async (req, res) => {
       if (sisaUang >= t.sisa) {
         // Lunas
         sisaUang -= t.sisa;
-        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '', metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai' }]);
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
         lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah, semester: t.semester });
       } else {
         // Cicilan
-        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '', metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai' }]);
         cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang, semester: t.semester };
         sisaUang = 0;
       }
@@ -1097,11 +1097,11 @@ router.post('/pembayaran-campuran', verifyAdmin, async (req, res) => {
       if (sisaUang <= 0) break;
       if (sisaUang >= t.sisa) {
         sisaUang -= t.sisa;
-        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '' }]);
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: t.sisa, tanggal_bayar, keterangan: keterangan || '', metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai' }]);
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
         lunasList.push({ jenis: t.jenis, jumlah: t.jumlah, dibayar: t.sisa, sudah: t.sudah, semester: t.semester });
       } else {
-        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '' }]);
+        await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: sisaUang, tanggal_bayar, keterangan: keterangan || '', metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai' }]);
         cicilanItem = { jenis: t.jenis, jumlah: t.jumlah, dibayar: sisaUang, sisa: t.sisa - sisaUang, sudah: t.sudah + sisaUang, semester: t.semester };
         sisaUang = 0;
       }
@@ -1245,7 +1245,7 @@ router.post('/pembayaran-fleksibel', verifyAdmin, async (req, res) => {
       if (bayarInput > t.sisa) {
         return res.status(400).json({ message: `Jumlah bayar untuk "${t.jenis}" (Rp ${formatRp(bayarInput)}) melebihi sisa tagihan (Rp ${formatRp(t.sisa)})` });
       }
-      await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: bayarInput, tanggal_bayar, keterangan: keterangan || '' }]);
+      await supabase.from('pembayaran').insert([{ tagihan_id: t.id, jumlah_bayar: bayarInput, tanggal_bayar, keterangan: keterangan || '', metode_bayar: metode_bayar === 'transfer' ? 'transfer' : 'tunai' }]);
       jumlahTagihanTerbayar += bayarInput;
       if (bayarInput >= t.sisa) {
         await supabase.from('tagihan').update({ status: 'lunas', tanggal_bayar }).eq('id', t.id);
